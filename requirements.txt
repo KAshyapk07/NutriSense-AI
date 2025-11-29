@@ -1,0 +1,6 @@
+rapidfuzz
+pandas
+re
+math
+numpy
+collections
