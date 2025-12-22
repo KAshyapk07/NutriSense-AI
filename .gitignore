@@ -1,2 +1,5 @@
 Dataset/Images
 structure
+
+#contains openAI api secretkey
+.env 
