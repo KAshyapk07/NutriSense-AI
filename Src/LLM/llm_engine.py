@@ -1,21 +1,11 @@
 class LLMEngine:
     """
     LLM reasoning engine for NutriSense AI.
-
-    Responsibilities:
-    - Modify recipes based on health constraints
-    - Compare nutrition between two dishes
-    - Estimate nutrition when dataset lookup fails
-
-    IMPORTANT:
-    - Dataset values are ground truth
-    - LLM must not hallucinate exact nutrition values
+    Now returns structured data that the frontend can render beautifully.
     """
 
     def __init__(self, llm_client):
         self.llm = llm_client
-
-# MODIFICATION PATHWAY
 
     def modify_recipe(
         self,
@@ -27,48 +17,59 @@ class LLMEngine:
     ) -> dict:
         """
         Modify an existing recipe while preserving dish identity.
+        Returns structured data for frontend.
         """
 
-        prompt = f"""
+        prompt = f"""You are a nutrition expert. Modify this recipe based on the user's request.
+
+ORIGINAL RECIPE:
 Dish: {dish_name}
 
-Original Nutrition (ground truth):
-{nutrition}
+Nutrition (per serving):
+{self._format_nutrition(nutrition)}
 
-Original Ingredients:
+Ingredients:
 {ingredients}
 
-Original Cooking Method:
+Cooking Method:
 {method}
 
-User Constraint:
+USER REQUEST:
 {user_constraint}
 
 TASK:
-- Modify the recipe to satisfy the constraint
-- Keep dish identity intact
-- Do NOT invent exact nutrition numbers
-- Explain changes clearly
+1. Suggest ingredient substitutions to meet the constraint
+2. Modify the cooking method if needed
+3. Explain how this affects nutrition (qualitatively - do NOT invent exact numbers)
+4. Keep the dish recognizable
 
-FORMAT YOUR RESPONSE AS:
-1. Modified Ingredients
-2. Modified Cooking Method
-3. Changes Summary (bullet points)
-4. Qualitative Nutrition Impact
+FORMAT YOUR RESPONSE CLEARLY WITH SECTIONS:
+**Modified Ingredients:**
+[List changes here]
+
+**Modified Cooking Method:**
+[Describe changes here]
+
+**Nutritional Impact:**
+[Explain how nutrition changes - use terms like "reduced", "lower", "higher" - NO exact numbers]
+
+**Tips:**
+[Any additional advice]
 """
 
         response = self.llm.generate(prompt)
 
         return {
-            "pathway": "modification",
-            "dish": dish_name,
-            "constraint": user_constraint,
+            "recipe_name": f"{dish_name} ({user_constraint})",
+            "nutrition": nutrition,  # Keep original for reference
+            "ingredients": "See modified version below",
+            "instructions": "See modified version below",
             "llm_response": response,
+            "pathway": "modification",
+            "constraint": user_constraint,
             "estimated": False,
-            "source": "dataset + llm"
+            "source": "dataset + llm_modification"
         }
-
-    #  COMPARISON PATHWAY
 
     def compare_dishes(
         self,
@@ -80,87 +81,125 @@ FORMAT YOUR RESPONSE AS:
     ) -> dict:
         """
         Compare two dishes using dataset-backed nutrition.
+        Returns structured comparison for frontend.
         """
 
-        prompt = f"""
-Dish A: {dish_a}
-Nutrition A:
-{nutrition_a}
+        prompt = f"""You are a nutrition expert comparing two dishes. Use the provided data.
 
-Dish B: {dish_b}
-Nutrition B:
-{nutrition_b}
+DISH A: {dish_a}
+Nutrition (per serving):
+{self._format_nutrition(nutrition_a)}
 
-User Goal:
-{user_goal if user_goal else "General health"}
+DISH B: {dish_b}
+Nutrition (per serving):
+{self._format_nutrition(nutrition_b)}
 
-RULES:
-- Use provided nutrition values as ground truth
-- Do NOT fabricate numbers
-- Compare calories, macros, and key micronutrients
-- Decide which dish is better for the given goal
+USER GOAL: {user_goal if user_goal else "General healthy eating"}
+
+IMPORTANT RULES:
+- Use ONLY the provided nutrition values
+- Do NOT invent numbers
+- Compare based on the user's goal
 - Mention trade-offs
 
-FORMAT YOUR RESPONSE AS:
-1. Summary Comparison
-2. Better Choice (for the goal)
-3. Trade-offs
+FORMAT YOUR RESPONSE WITH CLEAR SECTIONS:
+
+**Summary:**
+[Brief comparison of both dishes]
+
+**For {user_goal if user_goal else "general health"}:**
+[Which dish is better and why]
+
+**Key Differences:**
+- Calories: [comparison]
+- Protein: [comparison]  
+- Carbs: [comparison]
+- Fats: [comparison]
+
+**Trade-offs:**
+[What you gain/lose with each choice]
+
+**Recommendation:**
+[Final verdict]
 """
 
         response = self.llm.generate(prompt)
 
         return {
-            "pathway": "comparison",
             "dish_a": dish_a,
+            "nutrition_a": nutrition_a,
             "dish_b": dish_b,
-            "goal": user_goal,
+            "nutrition_b": nutrition_b,
             "llm_response": response,
+            "pathway": "comparison",
+            "goal": user_goal,
             "estimated": False,
-            "source": "dataset + llm"
+            "source": "dataset + llm_comparison"
         }
 
-    # ESTIMATOR / FALLBACK PATHWAY
-
-    def estimate_nutrition(
-        self,
-        user_query: str,
-        closest_dish: str | None = None,
-        reference_nutrition: dict | None = None
-    ) -> dict:
+    def estimate_nutrition(self, user_query: str) -> dict:
         """
         Estimate nutrition when dataset lookup fails.
+        Returns structured estimates with clear disclaimers.
         """
 
-        prompt = f"""
-User Query:
-{user_query}
+        prompt = f"""You are a nutrition expert. The user asked about a dish not in our database.
 
-Closest Known Dish:
-{closest_dish if closest_dish else "None"}
-
-Reference Nutrition (if available):
-{reference_nutrition if reference_nutrition else "None"}
+USER QUERY: "{user_query}"
 
 TASK:
-- Clearly state that values are ESTIMATES
-- Provide nutrition as approximate ranges
-- Assign a confidence level: High / Medium / Low
-- Do NOT claim medical accuracy
+Provide helpful nutritional information, but you MUST:
+1. State clearly this is an ESTIMATE
+2. Give approximate ranges (not exact numbers)
+3. Explain what the dish typically contains
+4. Provide general nutritional context
+5. Suggest similar dishes in Indian cuisine
 
-FORMAT YOUR RESPONSE AS:
-1. Estimated Nutrition (ranges)
-2. Reference Dish Used
-3. Confidence Level
-4. Disclaimer
+FORMAT YOUR RESPONSE:
+
+**About {user_query}:**
+[Brief description of the dish]
+
+**Estimated Nutrition (per serving):**
+⚠️ These are approximate values based on typical recipes
+- Calories: ~[range] kcal
+- Protein: ~[range]g
+- Carbohydrates: ~[range]g  
+- Fats: ~[range]g
+- Fiber: ~[range]g
+
+**Key Ingredients:**
+[List main ingredients]
+
+**Nutritional Highlights:**
+[What's good/noteworthy about this dish]
+
+**Similar Dishes in Database:**
+[Suggest 2-3 similar dishes we DO have data for]
+
+**Disclaimer:**
+These values are estimates. For precise nutrition data, consult a nutritionist or use dishes from our verified database.
 """
 
         response = self.llm.generate(prompt)
 
         return {
-            "pathway": "estimation",
-            "query": user_query,
-            "reference_dish": closest_dish,
+            "recipe_name": f"{user_query} (Estimated)",
+            "nutrition": {
+                "⚠️ Estimated Values": "See below"
+            },
+            "ingredients": "See estimated details below",
+            "instructions": "Not available - estimated dish",
             "llm_response": response,
+            "pathway": "estimation",
             "estimated": True,
-            "source": "llm_estimate"
+            "accuracy": 50.0,  # Lower confidence for estimates
+            "source": "llm_estimation"
         }
+
+    def _format_nutrition(self, nutrition: dict) -> str:
+        """Helper to format nutrition dict for LLM prompts"""
+        lines = []
+        for key, value in nutrition.items():
+            lines.append(f"- {key}: {value}")
+        return "\n".join(lines)

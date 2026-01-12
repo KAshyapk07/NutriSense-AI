@@ -5,7 +5,7 @@ class OllamaLLMClient:
     Local free LLM client using Ollama (STABLE VERSION)
     """
 
-    def __init__(self, model: str = "llama3.1:8b"):
+    def __init__(self, model: str = "llama3.2"):
         self.model = model
         self.url = "http://localhost:11434/api/generate"
 
