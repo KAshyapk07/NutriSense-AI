@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NutriSense AI - Precision Nutrition Engine</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2d7b6b;
+            --primary-hover: #1f5c52;
+            --secondary: #f0f4f3;
+            --text: #1a1a1a;
+            --text-light: #666;
+            --border: #e0e0e0;
+            --error: #d32f2f;
+            --success: #388e3c;
+            --loading: #2196f3;
+            --warning: #ff9800;
+        }
+
+        html, body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(135deg, #f5f7f6 0%, #e8eeed 100%);
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--border);
+            padding: 16px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .header p {
+            font-size: 13px;
+            color: var(--text-light);
+        }
+
+        .chat-wrapper {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            display: flex;
+            gap: 10px;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.ai {
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 80%;
+            padding: 16px 20px;
+            border-radius: 12px;
+            word-wrap: break-word;
+            line-height: 1.6;
+        }
+
+        .message.user .message-bubble {
+            background: var(--primary);
+            color: white;
+            border-radius: 16px 4px 16px 16px;
+        }
+
+        .message.ai .message-bubble {
+            background: white;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px 16px 16px 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        /* Recipe title */
+        .message.ai .message-bubble > strong:first-child {
+            display: block;
+            font-size: 17px;
+            color: var(--text);
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        /* Section headers */
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--primary);
+            font-size: 14px;
+            font-weight: 600;
+            margin: 18px 0 10px 0;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .section-header:first-of-type {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: none;
+        }
+
+        /* Paragraphs */
+        .message.ai .message-bubble p {
+            margin: 8px 0;
+            font-size: 14px;
+            line-height: 1.7;
+            color: var(--text);
+        }
+
+        .message.ai .message-bubble p:first-child {
+            margin-top: 0;
+        }
+
+        /* Bold text within paragraphs (not section headers) */
+        .message.ai .message-bubble p strong,
+        .message.ai .message-bubble li strong {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* Lists */
+        .message.ai .message-bubble ul {
+            margin: 10px 0;
+            padding-left: 20px;
+            list-style-type: disc;
+        }
+
+        .message.ai .message-bubble ul li {
+            margin: 6px 0;
+            line-height: 1.6;
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        .message.ai .message-bubble ul li::marker {
+            color: var(--primary);
+        }
+
+        /* Warning/info boxes */
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid var(--warning);
+            padding: 12px 14px;
+            margin: 12px 0;
+            border-radius: 4px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 12px 14px;
+            margin: 12px 0;
+            border-radius: 4px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: var(--text-light);
+            align-self: flex-end;
+            margin-top: 4px;
+        }
+
+        .message-loading {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .loader {
+            display: inline-flex;
+            gap: 4px;
+        }
+
+        .loader span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--loading);
+            animation: bounce 1.4s infinite;
+        }
+
+        .loader span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .loader span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.6; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .message-error {
+            background: #ffebee !important;
+            color: var(--error) !important;
+            border: 1px solid #ffcdd2 !important;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin: 14px 0;
+        }
+
+        .nutrition-card {
+            background: var(--secondary);
+            padding: 14px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .nutrition-card h4 {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 6px;
+        }
+
+        .nutrition-table {
+            width: 100%;
+            font-size: 13px;
+            border-collapse: collapse;
+        }
+
+        .nutrition-table tr {
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+        }
+
+        .nutrition-table tr:last-child {
+            border-bottom: none;
+        }
+
+        .nutrition-table td {
+            padding: 7px 0;
+        }
+
+        .nutrition-table td:first-child {
+            font-weight: 500;
+            color: var(--text-light);
+            padding-right: 12px;
+        }
+
+        .nutrition-table td:last-child {
+            text-align: right;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        /* Content sections (ingredients, instructions) */
+        .content-section {
+            margin: 14px 0;
+            padding: 14px;
+            background: var(--secondary);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .content-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .content-section-text {
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text);
+        }
+
+        .confidence-badge {
+            display: inline-block;
+            margin-top: 14px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            border-radius: 14px;
+            font-size: 11px;
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .estimated-badge {
+            display: inline-block;
+            margin-top: 14px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+            border-radius: 14px;
+            font-size: 11px;
+            color: var(--warning);
+            font-weight: 600;
+        }
+
+        .input-area {
+            background: white;
+            border-top: 1px solid var(--border);
+            padding: 12px 16px;
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .input-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+
+        .icon-btn:hover:not(:disabled) {
+            background: var(--secondary);
+            border-color: var(--primary);
+        }
+
+        .icon-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #image-file {
+            display: none;
+        }
+
+        .input-field-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .input-field-wrapper input {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .input-field-wrapper input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(45, 123, 107, 0.1);
+        }
+
+        .file-preview {
+            font-size: 11px;
+            color: var(--text-light);
+            padding: 6px 10px;
+            background: var(--secondary);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .send-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: scale(1.05);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .welcome-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .welcome-title {
+            font-size: 24px;
+            font-weight: 300;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        .welcome-subtitle {
+            font-size: 14px;
+            color: var(--text-light);
+            margin-bottom: 24px;
+            max-width: 500px;
+        }
+
+        .welcome-examples {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            max-width: 600px;
+        }
+
+        .example-btn {
+            padding: 12px 16px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            text-align: left;
+            transition: all 0.2s;
+        }
+
+        .example-btn:hover {
+            border-color: var(--primary);
+            background: var(--secondary);
+        }
+
+        @media (max-width: 600px) {
+            .message-bubble {
+                max-width: 95%;
+            }
+
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🥗 NutriSense AI</h1>
+        <p>Your precision nutrition engine for Indian cuisine</p>
+    </div>
+
+    <div class="chat-wrapper">
+        <div id="chat-messages" class="chat-messages">
+            <div class="welcome-area">
+                <div class="welcome-title">Welcome to NutriSense</div>
+                <div class="welcome-subtitle">
+                    Discover precise nutrition data and personalized meal insights for Indian dishes
+                </div>
+                <div class="welcome-examples">
+                    <button class="example-btn" onclick="sendExample('Dosa with less oil')">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">💡 Modification</div>
+                        <div style="font-weight: 500;">Dosa with less oil</div>
+                    </button>
+                    <button class="example-btn" onclick="sendExample('Compare Paneer Tikka vs Tandoori Chicken')">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">⚖️ Comparison</div>
+                        <div style="font-weight: 500;">Paneer vs Chicken</div>
+                    </button>
+                    <button class="example-btn" onclick="sendExample('What is in Sambar?')">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">🔍 Lookup</div>
+                        <div style="font-weight: 500;">Sambar nutrition</div>
+                    </button>
+                    <button class="example-btn" onclick="document.getElementById('image-file').click()">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">📸 Image</div>
+                        <div style="font-weight: 500;">Analyze food photo</div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <div class="input-actions">
+                <button class="icon-btn" onclick="document.getElementById('image-file').click()" title="Upload image">
+                    📷
+                </button>
+            </div>
+            <div class="input-field-wrapper">
+                <div id="file-preview" style="display: none;"></div>
+                <input 
+                    type="text" 
+                    id="user-query" 
+                    placeholder="Ask about Indian dishes, compare recipes, or upload a photo..."
+                    autocomplete="off"
+                >
+            </div>
+            <button class="send-btn" onclick="sendMessage()" title="Send message">
+                ➤
+            </button>
+        </div>
+    </div>
+
+    <input type="file" id="image-file" accept="image/*" onchange="handleImageSelect()">
+
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const userQuery = document.getElementById('user-query');
+        const sendBtn = document.querySelector('.send-btn');
+        const imageFile = document.getElementById('image-file');
+        const filePreview = document.getElementById('file-preview');
+
+        let selectedImage = null;
+        let isProcessing = false;
+
+        function getTime() {
+            return new Date().toLocaleTimeString('en-US', { 
+                hour: '2-digit', minute: '2-digit', hour12: true 
+            });
+        }
+
+        function handleImageSelect() {
+            if (imageFile.files.length > 0) {
+                selectedImage = imageFile.files[0];
+                filePreview.innerHTML = `
+                    <span style="flex: 1;">📎 ${selectedImage.name}</span>
+                    <span style="cursor: pointer; color: var(--error); font-weight: bold;" onclick="clearImage()">✕</span>
+                `;
+                filePreview.style.display = 'flex';
+                userQuery.focus();
+            }
+        }
+
+        function clearImage() {
+            selectedImage = null;
+            imageFile.value = '';
+            filePreview.style.display = 'none';
+        }
+
+        function renderMessage(text, isUser = false) {
+            const message = document.createElement('div');
+            message.className = `message ${isUser ? 'user' : 'ai'}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.innerHTML = text;
+
+            const time = document.createElement('div');
+            time.className = 'message-time';
+            time.textContent = getTime();
+
+            message.appendChild(bubble);
+            message.appendChild(time);
+            chatMessages.appendChild(message);
+
+            document.querySelector('.welcome-area')?.remove();
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function renderLoading() {
+            const message = document.createElement('div');
+            message.className = 'message ai';
+            message.id = 'loading-message';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.innerHTML = `
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span>Analyzing</span>
+                    <div class="loader"><span></span><span></span><span></span></div>
+                </div>
+            `;
+
+            message.appendChild(bubble);
+            chatMessages.appendChild(message);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return message;
+        }
+
+        function createTable(nutrition) {
+            let html = '<table class="nutrition-table"><tbody>';
+            for (let key in nutrition) {
+                html += `<tr><td>${key}</td><td>${nutrition[key]}</td></tr>`;
+            }
+            html += '</tbody></table>';
+            return html;
+        }
+
+        function formatLLMText(text) {
+            if (!text) return '';
+            
+            // Replace **text** with section headers
+            text = text.replace(/\*\*(.+?)\*\*/g, '<div class="section-header">$1</div>');
+            
+            // Split into lines
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+            let html = '';
+            let inList = false;
+            
+            for (let line of lines) {
+                // Check if it's already a section header
+                if (line.includes('class="section-header"')) {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    html += line;
+                    continue;
+                }
+                
+                // Check if it's a bullet point
+                if (line.match(/^[-•*]\s/)) {
+                    if (!inList) {
+                        html += '<ul>';
+                        inList = true;
+                    }
+                    html += `<li>${line.replace(/^[-•*]\s/, '')}</li>`;
+                } else {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    
+                    // Check for warnings/disclaimers
+                    if (line.startsWith('⚠️') || line.toLowerCase().includes('disclaimer') || line.toLowerCase().includes('these are approximate')) {
+                        html += `<div class="warning-box">${line}</div>`;
+                    } else if (line.startsWith('ℹ️') || line.toLowerCase().includes('note:')) {
+                        html += `<div class="info-box">${line}</div>`;
+                    } else {
+                        html += `<p>${line}</p>`;
+                    }
+                }
+            }
+            
+            if (inList) html += '</ul>';
+            
+            return html;
+        }
+
+        function formatResponse(data) {
+            console.log('Formatting response:', data);
+
+            // Error handling
+            if (data.error) {
+                return `<strong>❌ Error</strong><p>${data.error}</p>`;
+            }
+
+            // COMPARISON PATHWAY
+            if (data.dish_a && data.dish_b && data.nutrition_a && data.nutrition_b) {
+                let html = '';
+                
+                // Show LLM analysis first
+                if (data.llm_response) {
+                    html += formatLLMText(data.llm_response);
+                }
+                
+                // Show comparison table
+                html += `
+                    <div class="comparison-grid">
+                        <div class="nutrition-card">
+                            <h4>${data.dish_a}</h4>
+                            ${createTable(data.nutrition_a)}
+                        </div>
+                        <div class="nutrition-card">
+                            <h4>${data.dish_b}</h4>
+                            ${createTable(data.nutrition_b)}
+                        </div>
+                    </div>
+                `;
+                
+                if (data.accuracy) {
+                    html += `<span class="confidence-badge">✓ ${Math.round(data.accuracy)}% Confidence</span>`;
+                }
+                
+                return html;
+            }
+
+            // EXTRACTION/MODIFICATION PATHWAY
+            if (data.recipe_name && data.nutrition) {
+                let html = `<strong>${data.recipe_name}</strong>`;
+                
+                // Nutrition table
+                html += `
+                    <div class="nutrition-card" style="margin-top: 14px;">
+                        ${createTable(data.nutrition)}
+                    </div>
+                `;
+                
+                // Show ingredients if available and meaningful
+                if (data.ingredients && 
+                    !data.ingredients.includes('See modified') && 
+                    !data.ingredients.includes('Not available') &&
+                    data.ingredients.trim().length > 10) {
+                    html += `
+                        <div class="content-section">
+                            <div class="content-section-title">📋 Ingredients</div>
+                            <div class="content-section-text">${data.ingredients}</div>
+                        </div>
+                    `;
+                }
+                
+                // Show instructions if available and meaningful
+                if (data.instructions && 
+                    !data.instructions.includes('See modified') && 
+                    !data.instructions.includes('Not available') &&
+                    data.instructions.trim().length > 10) {
+                    html += `
+                        <div class="content-section">
+                            <div class="content-section-title">👨‍🍳 Instructions</div>
+                            <div class="content-section-text">${data.instructions}</div>
+                        </div>
+                    `;
+                }
+                
+                // Show LLM response if available (modifications, etc.)
+                if (data.llm_response) {
+                    html += formatLLMText(data.llm_response);
+                }
+                
+                // Badge
+                if (data.estimated) {
+                    html += `<span class="estimated-badge">⚠️ Estimated Values</span>`;
+                } else if (data.accuracy) {
+                    html += `<span class="confidence-badge">✓ ${Math.round(data.accuracy)}% Confidence</span>`;
+                }
+                
+                return html;
+            }
+
+            // PURE LLM RESPONSE (estimation fallback)
+            if (data.llm_response) {
+                return formatLLMText(data.llm_response);
+            }
+
+            return '<p>Received response from server</p>';
+        }
+
+        async function sendMessage() {
+            const query = userQuery.value.trim();
+            
+            if (!query && !selectedImage) return;
+
+            isProcessing = true;
+            sendBtn.disabled = true;
+            userQuery.disabled = true;
+
+            let userDisplay = query || '';
+            if (selectedImage) {
+                userDisplay += ` (📸 ${selectedImage.name})`;
+            }
+            renderMessage(userDisplay, true);
+
+            const imageToSend = selectedImage;
+            userQuery.value = '';
+            clearImage();
+
+            const loadingMsg = renderLoading();
+
+            try {
+                const formData = new FormData();
+                formData.append('query', query || '');
+                if (imageToSend) {
+                    formData.append('image', imageToSend);
+                }
+
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                loadingMsg.remove();
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                renderMessage(formatResponse(data));
+            } catch (error) {
+                console.error('Error:', error);
+                loadingMsg.remove();
+                renderMessage(`<strong>❌ Connection Error</strong><p>Could not reach server.</p>`);
+            } finally {
+                isProcessing = false;
+                sendBtn.disabled = false;
+                userQuery.disabled = false;
+                userQuery.focus();
+            }
+        }
+
+        function sendExample(text) {
+            userQuery.value = text;
+            sendMessage();
+        }
+
+        userQuery.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !isProcessing) {
+                sendMessage();
+            }
+        });
+
+        userQuery.focus();
+    </script>
+</body>
+</html>
