@@ -1,0 +1,13 @@
+rapidfuzz
+pandas
+re
+math
+numpy
+collections
+matplotlib
+json
+requests
+
+
+#Install OLLAMA locally
+# ollama
