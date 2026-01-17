@@ -354,19 +354,3 @@ userQuery.addEventListener('keypress', (e) => {
 document.addEventListener('DOMContentLoaded', () => {
     userQuery.focus();
 });
-
-// Add fadeOut animation for welcome area
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes fadeOut {
-        from {
-            opacity: 1;
-            transform: scale(1);
-        }
-        to {
-            opacity: 0;
-            transform: scale(0.95);
-        }
-    }
-`;
-document.head.appendChild(style);
