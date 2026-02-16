@@ -1,7 +1,32 @@
 Dataset/Images
 structure
 
-#contains openAI api secretkey
 .env 
 
 temp_uploads/
+.pytest_cache/
+.Nutri
+.env
+
+
+# Documentation
+Docs/*
+!Docs/Architecture.jpg
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

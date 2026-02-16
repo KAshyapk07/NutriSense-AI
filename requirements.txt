@@ -1,13 +1,11 @@
-rapidfuzz
-pandas
-re
-math
-numpy
-collections
-matplotlib
-json
-requests
-
-
-#Install OLLAMA locally
-# ollama
+numpy==1.26.4
+pandas==2.2.1
+matplotlib==3.8.3
+rapidfuzz==3.6.2
+requests==2.31.0
+fastapi>=0.110.0
+uvicorn>=0.27.1
+python-multipart>=0.0.9
+neo4j>=5.18.0
+pydantic>=2.6.3
+python-dotenv>=1.0.1
