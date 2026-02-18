@@ -1,11 +1,24 @@
+# ── Core ──
 numpy==1.26.4
 pandas==2.2.1
-matplotlib==3.8.3
+
+# ── Image Classification ──
+tensorflow>=2.15.0
+Pillow>=10.2.0
+scikit-learn>=1.4.0
+
+# ── Web Server ──
+flask>=3.0.0
+
+# ── Recipe Matching ──
 rapidfuzz==3.6.2
-requests==2.31.0
-fastapi>=0.110.0
-uvicorn>=0.27.1
-python-multipart>=0.0.9
+
+# ── Neo4j Graph Database ──
 neo4j>=5.18.0
-pydantic>=2.6.3
 python-dotenv>=1.0.1
+
+# ── LLM Client ──
+requests>=2.31.0
+
+# ── Visualization (notebooks / training) ──
+matplotlib==3.8.3

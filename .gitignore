@@ -4,6 +4,7 @@ structure
 .env 
 
 temp_uploads/
+class_names.json
 .pytest_cache/
 .Nutri
 .env
