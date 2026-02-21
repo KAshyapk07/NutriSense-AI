@@ -1,7 +1,12 @@
-from Src.Pathway_1.pathway1 import pathway_1_lookup as search_recipe
-from Src.neo4j_client import Neo4jClient
+from __future__ import annotations
+
+import asyncio
 import json
 import re
+import traceback
+
+from Src.Pathway_1.pathway1 import pathway_1_lookup as search_recipe
+from Src.neo4j_client import Neo4jClient
 
 
 COMPARE_PATTERNS = [
@@ -185,7 +190,6 @@ Return ONLY valid JSON (no markdown, no explanation):
                 return self.handle_extraction(target)
 
         except Exception as e:
-            import traceback
             traceback.print_exc()
             return {
                 'error': str(e),
@@ -295,7 +299,158 @@ Return ONLY valid JSON (no markdown, no explanation):
             return out
 
         except Exception as e:
-            import traceback
             traceback.print_exc()
             goal_text = f" for {goal}" if goal else ""
             return self.engine.estimate_nutrition(f"Compare {dishes[0]} and {dishes[1]}{goal_text}")
+
+    # Async execute methods.
+    # Neo4j queries and TF inference run in a thread pool via asyncio.to_thread.
+    # LLM calls use generate_async (httpx) and do not block the event loop.
+
+    async def execute_async(
+        self, text_query: str = "", image_input: str | None = None
+    ) -> dict:
+        try:
+            if image_input is not None:
+                dish_name, img_conf = await asyncio.to_thread(
+                    self.image_model.predict, image_input
+                )
+                return await self._async_handle_extraction(dish_name, override_conf=img_conf)
+
+            if not text_query or text_query.strip() == "":
+                return {
+                    "error": "Please provide a valid query",
+                    "llm_response": "I need a question about food to help you!",
+                }
+
+            # classify_intent may fall back to the sync LLM — run in a thread
+            intent = await asyncio.to_thread(self.classify_intent, text_query)
+            dishes = intent.get("dishes", [])
+            constraint = intent.get("constraint")
+            pathway = intent.get("pathway", "EXTRACT")
+
+            if pathway == "COMPARE" and len(dishes) >= 2:
+                return await self._async_handle_comparison(dishes, constraint)
+            elif pathway == "MODIFY":
+                target = dishes[0] if dishes else text_query
+                return await self._async_handle_modification(target, constraint)
+            else:
+                target = dishes[0] if dishes else text_query
+                return await self._async_handle_extraction(target)
+
+        except Exception as exc:
+            traceback.print_exc()
+            return {"error": str(exc), "llm_response": f"An error occurred: {exc}"}
+
+    async def _async_handle_extraction(
+        self, name: str, override_conf: float | None = None
+    ) -> dict:
+        try:
+            if not name or name.strip() == "":
+                return await self.engine.estimate_nutrition_async("general healthy meal")
+
+            res = await asyncio.to_thread(search_recipe, name, self.neo4j_client)
+
+            if res and res.get("status") == "FOUND" and res.get("results"):
+                out = res["results"][0].copy()
+                if override_conf is not None:
+                    out["accuracy"] = float(override_conf * 100)
+                elif "confidence" in out:
+                    out["accuracy"] = float(out["confidence"] * 100)
+                else:
+                    out["accuracy"] = 85.0
+                return out
+
+            return await self.engine.estimate_nutrition_async(name)
+
+        except Exception:
+            return await self.engine.estimate_nutrition_async(name)
+
+    async def _async_handle_modification(self, name: str, constraint: str) -> dict:
+        try:
+            if not name or name.strip() == "":
+                return {
+                    "error": "No dish specified",
+                    "llm_response": "Please specify which dish you want to modify.",
+                }
+
+            res = await asyncio.to_thread(search_recipe, name, self.neo4j_client)
+
+            if res and res.get("status") == "FOUND" and res.get("results"):
+                d = res["results"][0]
+                out = await self.engine.modify_recipe_async(
+                    d.get("recipe_name", name),
+                    d.get("nutrition", {}),
+                    d.get("ingredients", "Not available"),
+                    d.get("instructions", "Not available"),
+                    constraint,
+                )
+                out["accuracy"] = float(d.get("confidence", 0.85) * 100)
+                return out
+
+            constraint_text = f" with {constraint}" if constraint else ""
+            return await self.engine.estimate_nutrition_async(f"{name}{constraint_text}")
+
+        except Exception:
+            constraint_text = f" with {constraint}" if constraint else ""
+            return await self.engine.estimate_nutrition_async(f"{name}{constraint_text}")
+
+    async def _async_handle_comparison(self, dishes: list, goal: str) -> dict:
+        try:
+            if len(dishes) < 2:
+                return {
+                    "error": "Need two dishes to compare",
+                    "llm_response": "Please specify two dishes to compare.",
+                }
+
+            res_a, res_b = await asyncio.gather(
+                asyncio.to_thread(search_recipe, dishes[0], self.neo4j_client),
+                asyncio.to_thread(search_recipe, dishes[1], self.neo4j_client),
+            )
+
+            found_a = res_a and res_a.get("status") == "FOUND" and res_a.get("results")
+            found_b = res_b and res_b.get("status") == "FOUND" and res_b.get("results")
+
+            if found_a:
+                dish_a_name = res_a["results"][0].get("recipe_name", dishes[0])
+                nutrition_a = res_a["results"][0].get("nutrition", {})
+                is_a_estimated = False
+            else:
+                dish_a_name = dishes[0]
+                nutrition_a = await self.engine.estimate_single_dish_nutrition_async(dishes[0])
+                is_a_estimated = True
+
+            if found_b:
+                dish_b_name = res_b["results"][0].get("recipe_name", dishes[1])
+                nutrition_b = res_b["results"][0].get("nutrition", {})
+                is_b_estimated = False
+            else:
+                dish_b_name = dishes[1]
+                nutrition_b = await self.engine.estimate_single_dish_nutrition_async(dishes[1])
+                is_b_estimated = True
+
+            out = await self.engine.compare_dishes_async(
+                dish_a_name, nutrition_a,
+                dish_b_name, nutrition_b,
+                goal,
+                is_a_estimated=is_a_estimated,
+                is_b_estimated=is_b_estimated,
+            )
+
+            if not is_a_estimated and not is_b_estimated:
+                conf_a = res_a["results"][0].get("confidence", 0.85)
+                conf_b = res_b["results"][0].get("confidence", 0.85)
+                out["accuracy"] = float((conf_a + conf_b) / 2 * 100)
+            elif is_a_estimated and is_b_estimated:
+                out["accuracy"] = 55.0
+            else:
+                out["accuracy"] = 70.0
+
+            return out
+
+        except Exception as exc:
+            traceback.print_exc()
+            goal_text = f" for {goal}" if goal else ""
+            return await self.engine.estimate_nutrition_async(
+                f"Compare {dishes[0]} and {dishes[1]}{goal_text}"
+            )

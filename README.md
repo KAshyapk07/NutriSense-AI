@@ -1,4 +1,4 @@
-# NutriSense-AI
+# NutriSense-AI — Comprehensive Project Status & Roadmap
 
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![TensorFlow](https://img.shields.io/badge/TensorFlow-Keras-orange)
