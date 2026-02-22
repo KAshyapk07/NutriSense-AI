@@ -1,3 +1,23 @@
+from __future__ import annotations
+
+from pydantic import BaseModel, Field, ValidationError
+
+
+class NutritionEstimate(BaseModel):
+    """Structured schema for a single-dish nutrition estimate.
+
+    Pydantic validates and coerces the values returned by the LLM in JSON
+    mode, eliminating per-line string splitting and hardcoded fallback
+    parsing entirely.
+    """
+
+    calories: float = Field(..., description="Total calories in kcal")
+    protein: float = Field(..., description="Protein in grams")
+    carbohydrates: float = Field(..., description="Carbohydrates in grams")
+    fats: float = Field(..., description="Fats in grams")
+    fiber: float = Field(..., description="Dietary fiber in grams")
+
+
 class LLMEngine:
     """
     LLM reasoning engine for NutriSense AI.
@@ -7,66 +27,54 @@ class LLMEngine:
     def __init__(self, llm_client):
         self.llm = llm_client
 
+    _NUTRITION_FALLBACK = {
+        "Calories": "~250 kcal",
+        "Protein": "~8g",
+        "Carbohydrates": "~35g",
+        "Fats": "~10g",
+        "Fiber": "~3g",
+    }
+
     def estimate_single_dish_nutrition(self, dish_name: str) -> dict:
         """
         Estimate nutrition for a single dish when not in database.
-        Returns nutrition dict compatible with comparison.
+
+        Uses Ollama's JSON mode so the model is *forced* to emit a valid JSON
+        object.  The result is validated with the ``NutritionEstimate`` Pydantic
+        model — no fragile line-splitting required.
+
+        Returns a nutrition dict compatible with comparison and the frontend.
+        Falls back to approximate placeholder values if validation fails.
         """
-        
-        prompt = f"""You are a nutrition expert. Provide estimated nutrition for this Indian dish.
+        prompt = f"""You are a nutrition expert. Estimate nutrition for this Indian dish.
 
 DISH: {dish_name}
 
-TASK:
-Provide realistic estimated nutrition values based on typical recipes for ONE SERVING.
+Return a JSON object with EXACTLY these keys for one typical serving.
+All values must be plain numbers (no units, no strings):
 
-IMPORTANT: Return ONLY the nutrition values in this EXACT format (no extra text):
+{{
+  "calories": <number>,
+  "protein": <number>,
+  "carbohydrates": <number>,
+  "fats": <number>,
+  "fiber": <number>
+}}
 
-Calories: [number] kcal
-Protein: [number]g
-Carbohydrates: [number]g
-Fats: [number]g
-Fiber: [number]g
+Base estimates on typical Indian recipes and a standard single-portion serving size."""
 
-Base your estimates on:
-- Typical serving size (1 plate/serving)
-- Common ingredients and preparation methods
-- Standard Indian cuisine recipes
-
-Example format:
-Calories: 250 kcal
-Protein: 8g
-Carbohydrates: 35g
-Fats: 10g
-Fiber: 4g
-
-Respond ONLY with the nutrition values in the exact format shown above. No additional text.
-"""
-
-        response = self.llm.generate(prompt).strip()
-        
-        # Parse the LLM response into a nutrition dict
-        nutrition = {}
-        for line in response.split('\n'):
-            line = line.strip()
-            if ':' in line and line:
-                try:
-                    key, value = line.split(':', 1)
-                    nutrition[key.strip()] = value.strip()
-                except:
-                    continue
-        
-        # Fallback if parsing fails
-        if not nutrition:
-            nutrition = {
-                "Calories": "~250 kcal",
-                "Protein": "~8g",
-                "Carbohydrates": "~35g",
-                "Fats": "~10g",
-                "Fiber": "~3g"
+        try:
+            data = self.llm.generate_json(prompt)
+            model = NutritionEstimate(**data)
+            return {
+                "Calories": f"{model.calories} kcal",
+                "Protein": f"{model.protein}g",
+                "Carbohydrates": f"{model.carbohydrates}g",
+                "Fats": f"{model.fats}g",
+                "Fiber": f"{model.fiber}g",
             }
-        
-        return nutrition
+        except (ValidationError, KeyError, Exception):
+            return dict(self._NUTRITION_FALLBACK)
 
     def modify_recipe(
         self,
@@ -284,57 +292,39 @@ These values are estimates. For precise nutrition data, consult a nutritionist o
     # so the Ollama HTTP call does not block the event loop.
 
     async def estimate_single_dish_nutrition_async(self, dish_name: str) -> dict:
-        prompt = f"""You are a nutrition expert. Provide estimated nutrition for this Indian dish.
+        """
+        Async variant of estimate_single_dish_nutrition.
+        Uses Ollama JSON mode + NutritionEstimate validation.
+        """
+        prompt = f"""You are a nutrition expert. Estimate nutrition for this Indian dish.
 
 DISH: {dish_name}
 
-TASK:
-Provide realistic estimated nutrition values based on typical recipes for ONE SERVING.
+Return a JSON object with EXACTLY these keys for one typical serving.
+All values must be plain numbers (no units, no strings):
 
-IMPORTANT: Return ONLY the nutrition values in this EXACT format (no extra text):
+{{
+  "calories": <number>,
+  "protein": <number>,
+  "carbohydrates": <number>,
+  "fats": <number>,
+  "fiber": <number>
+}}
 
-Calories: [number] kcal
-Protein: [number]g
-Carbohydrates: [number]g
-Fats: [number]g
-Fiber: [number]g
+Base estimates on typical Indian recipes and a standard single-portion serving size."""
 
-Base your estimates on:
-- Typical serving size (1 plate/serving)
-- Common ingredients and preparation methods
-- Standard Indian cuisine recipes
-
-Example format:
-Calories: 250 kcal
-Protein: 8g
-Carbohydrates: 35g
-Fats: 10g
-Fiber: 4g
-
-Respond ONLY with the nutrition values in the exact format shown above. No additional text.
-"""
-        response = (await self.llm.generate_async(prompt)).strip()
-
-        nutrition = {}
-        for line in response.split("\n"):
-            line = line.strip()
-            if ":" in line and line:
-                try:
-                    key, value = line.split(":", 1)
-                    nutrition[key.strip()] = value.strip()
-                except Exception:
-                    continue
-
-        if not nutrition:
-            nutrition = {
-                "Calories": "~250 kcal",
-                "Protein": "~8g",
-                "Carbohydrates": "~35g",
-                "Fats": "~10g",
-                "Fiber": "~3g",
+        try:
+            data = await self.llm.generate_json_async(prompt)
+            model = NutritionEstimate(**data)
+            return {
+                "Calories": f"{model.calories} kcal",
+                "Protein": f"{model.protein}g",
+                "Carbohydrates": f"{model.carbohydrates}g",
+                "Fats": f"{model.fats}g",
+                "Fiber": f"{model.fiber}g",
             }
-
-        return nutrition
+        except (ValidationError, KeyError, Exception):
+            return dict(self._NUTRITION_FALLBACK)
 
     async def modify_recipe_async(
         self,

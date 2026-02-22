@@ -61,6 +61,7 @@ class NutriSenseRouter:
 
     def _extract_compare_dishes(self, q: str):
         for splitter in [r'\s+vs\.?\s+', r'\s+versus\s+', r'\s+compare\s+',
+                         r'\s+better\s+than\s+', r'\s+healthier\s+than\s+',
                          r'\s+and\s+', r'\s+or\s+']:
             parts = re.split(splitter, q, maxsplit=1, flags=re.IGNORECASE)
             if len(parts) == 2:
