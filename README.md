@@ -2,7 +2,10 @@
 
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![TensorFlow](https://img.shields.io/badge/TensorFlow-Keras-orange)
-![Flask](https://img.shields.io/badge/Flask-2.3+-lightgrey)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688)
+![React](https://img.shields.io/badge/React-18+-61DAFB)
+![Neo4j](https://img.shields.io/badge/Neo4j-Graph-blue)
+![Pytest](https://img.shields.io/badge/Pytest-Passing-success)
 ![LLM](https://img.shields.io/badge/LLM-Ollama%203.2-blueviolet)
 ![EfficientNet](https://img.shields.io/badge/Model-EfficientNet--B4-green)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -140,9 +143,9 @@ This dataset is used to train the image classification model (Efficientnet B4) f
 ### Prerequisites:
 
 - Python 3.9+
-- PyTorch 2.0+
-- TensorFlow/Keras (for data preprocessing)
-- Flask 2.3+
+- Neo4j Desktop (local) or AuraDB
+- Node.js (for React frontend)
+- Ollama (for local LLM)
 
 ```bash
 # Clone the repository
@@ -163,21 +166,27 @@ pip install -r requirements.txt
 ```
 ### Usage
 
-Run the application
+**1. Start the Backend (FastAPI)**
 ```bash
-python main.py
+python run.py
+```
+
+**2. Start the Frontend (React)**
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 ## Tech Stack
 
-- Python : Core programming language
-- Rapidfuzz : Fuzzy matching
-- Tensorflow/Keras : Image Classification model training
-- LLM integration : Llama 3.2 with 3B parameters
-- Image Training model: EfficientNet B4
-- Flask : Backend API work
-- Numpy : Numerical computations
-- Pandas : Data manipulation and analysis
+- **Backend**: FastAPI, Python 3.9+
+- **Frontend**: React, Vite, Tailwind CSS
+- **Database**: Neo4j (Knowledge Graph)
+- **AI/ML**: Ollama (Llama 3.2 local inference), EfficientNet-B4 (Image Classification)
+- **Data Validation**: Pydantic (Structured LLM Outputs)
+- **Testing**: Pytest, Pytest-Asyncio (116+ tests)
+- **Fuzzy Matching**: RapidFuzz
 
 ## Model Performance
 
@@ -203,12 +212,12 @@ I documented the key technical components of this project in detailed blog posts
 
 ## Future Enhancements
 
-- Portion size estimation: ML model to estimate portion from image.
-- Add meal planning and recommendation features.
-- Multi-language support.
-- Expand dataset.
-- User meal logging: Track daily nutrition intake across multiple meals
-- System Evaluation
+- **Phase 3: GraphRAG & Vector Search**: Hybrid retrieval using vector embeddings and graph structure.
+- **Phase 4: React Frontend Upgrade**: Complete the transition to a modern React UI.
+- **Phase 5: AI Chef Agent**: Interactive step-by-step cooking companion.
+- **Phase 6: Authentication & User Graph**: Personalized recommendations and history tracking.
+- **Phase 7: AI & ML Enhancements**: Data augmentation, fine-tuning, and RAG exploration.
+- **Phase 8: Production & Deployment**: Docker containerization, cloud deployment, and CI/CD.
 
 ## Author
 
