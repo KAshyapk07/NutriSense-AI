@@ -26,9 +26,7 @@ CSV_PATH = "Dataset/processed/Final_unified_dataset.csv"
 CLASS_NAMES_PATH = "class_names.json"
 
 
-# ─────────────────────────────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────────────────────────────
+
 
 def clean_ingredient(name: str) -> str:
     """Normalize an ingredient name for deduplication."""
@@ -48,20 +46,16 @@ def safe_float(val):
     return float(val)
 
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 0: CONNECT
-# ─────────────────────────────────────────────────────────────────
+
 
 def connect():
     driver = GraphDatabase.driver(URI, auth=AUTH)
     driver.verify_connectivity()
-    print(f"✅ Connected to Neo4j at {URI}")
+    print(f"Connected to Neo4j at {URI}")
     return driver
 
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 1: CLEAR EXISTING DATA (safety reset)
-# ─────────────────────────────────────────────────────────────────
+
 
 def clear_database(driver):
     print("\n[1/8] Clearing existing data...")
@@ -71,19 +65,16 @@ def clear_database(driver):
         if count > 0:
             print(f"  Deleting {count} existing nodes...")
             session.run("MATCH (n) DETACH DELETE n")
-            print("  ✅ Database cleared.")
+            print("  Database cleared.")
         else:
-            print("  ✅ Database already empty.")
+            print("  Database already empty.")
 
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 2: CREATE CONSTRAINTS & INDEXES
-# ─────────────────────────────────────────────────────────────────
+
 
 def create_constraints(driver):
     print("\n[2/8] Creating constraints & indexes...")
     with driver.session() as session:
-        # Drop existing constraints/indexes first (ignore errors if they don't exist)
         constraints = [
             "CREATE CONSTRAINT recipe_id IF NOT EXISTS FOR (r:Recipe) REQUIRE r.id IS UNIQUE",
             "CREATE CONSTRAINT ingredient_name IF NOT EXISTS FOR (i:Ingredient) REQUIRE i.name IS UNIQUE",
@@ -104,9 +95,7 @@ def create_constraints(driver):
         except Exception as e:
             print(f"  [WARN] Full-text index: {e}")
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 3: LOAD CUISINE NODES
-# ─────────────────────────────────────────────────────────────────
+
 
 def load_cuisines(driver, df):
     print("\n[3/8] Loading Cuisine nodes...")
@@ -120,9 +109,7 @@ def load_cuisines(driver, df):
     return cuisines
 
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 4: LOAD RECIPE NODES
-# ─────────────────────────────────────────────────────────────────
+
 
 def load_recipes(driver, df):
     print("\n[4/8] Loading Recipe nodes...")
@@ -150,7 +137,6 @@ def load_recipes(driver, df):
         }
         recipes.append(recipe)
 
-    # Batch insert with UNWIND
     BATCH_SIZE = 100
     with driver.session() as session:
         for i in range(0, len(recipes), BATCH_SIZE):
@@ -184,14 +170,11 @@ def load_recipes(driver, df):
     return recipes
 
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 5: LOAD INGREDIENT NODES & CONTAINS RELATIONSHIPS
-# ─────────────────────────────────────────────────────────────────
+
 
 def load_ingredients(driver, df):
     print("\n[5/8] Loading Ingredient nodes & CONTAINS relationships...")
 
-    # Collect all unique ingredients first
     all_ingredients = set()
     recipe_ingredients = {}  # recipe_original -> list of cleaned ingredients
 
@@ -234,14 +217,11 @@ def load_ingredients(driver, df):
     return all_ingredients
 
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 6: CREATE BELONGS_TO RELATIONSHIPS
-# ─────────────────────────────────────────────────────────────────
+
 
 def create_cuisine_relationships(driver, df):
     print("\n[6/8] Creating BELONGS_TO relationships...")
     with driver.session() as session:
-        # Use a single efficient query
         pairs = df[['recipe_original', 'Cuisine']].drop_duplicates().values.tolist()
         BATCH_SIZE = 100
         for i in range(0, len(pairs), BATCH_SIZE):
@@ -256,9 +236,7 @@ def create_cuisine_relationships(driver, df):
     print(f"  [OK] {len(pairs)} BELONGS_TO relationships created.")
 
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 7: LOAD IMAGE CLASS NODES
-# ─────────────────────────────────────────────────────────────────
+
 
 def load_image_classes(driver):
     print("\n[7/8] Loading ImageClass nodes...")
@@ -274,15 +252,12 @@ def load_image_classes(driver):
     return classes
 
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 8: CREATE MAPS_TO RELATIONSHIPS (fuzzy match)
-# ─────────────────────────────────────────────────────────────────
+
 
 def create_image_mappings(driver, image_classes):
     print("\n[8/8] Creating MAPS_TO relationships (ImageClass → Recipe)...")
 
     with driver.session() as session:
-        # Get all recipe food_names
         result = session.run("MATCH (r:Recipe) RETURN r.food_name AS food_name")
         food_names = [record["food_name"].lower().strip() for record in result]
 
@@ -298,14 +273,12 @@ def create_image_mappings(driver, image_classes):
                         MERGE (ic)-[:MAPS_TO]->(r)
                     """, class_name=cls, class_lower=cls_lower)
                     mapped += 1
-                    break  # One match per image class is enough
+                    break
 
     print(f"  [OK] {mapped} MAPS_TO relationships created.")
 
 
-# ─────────────────────────────────────────────────────────────────
-# STEP 9: VERIFY & PRINT SUMMARY
-# ─────────────────────────────────────────────────────────────────
+
 
 def print_summary(driver):
     print("\n" + "=" * 60)
@@ -338,15 +311,13 @@ def print_summary(driver):
             LIMIT 3
         """)
         for record in result:
-            print(f"\n  🍛 {record['recipe']}")
+            print(f"\n  {record['recipe']}")
             print(f"     Cuisine: {record['cuisine']}")
             print(f"     Calories: {record['cal']}, Protein: {record['protein']}g")
             print(f"     Ingredients: {', '.join(record['ingredients'][:8])}...")
 
 
-# ─────────────────────────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────────────────────────
+
 
 def main():
     print("=" * 60)

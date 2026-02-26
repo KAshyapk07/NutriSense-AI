@@ -1,8 +1,8 @@
-"""
+﻿"""
 Tests for the FastAPI REST API layer.
 
 The startup lifecycle (Neo4j init, TF model loading, Ollama init) is fully
-mocked — no external services are required to run these tests.
+mocked â€” no external services are required to run these tests.
 """
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Fixtures
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @pytest.fixture(scope="module")
 def mock_router_instance():
@@ -40,10 +40,10 @@ def client(mock_router_instance):
     TestClient with all external startup dependencies patched.
 
     Patches applied (in order of lifespan calls):
-      1. Backend.dependencies.neo4j.init  — skips Neo4j connection
-      2. Backend.dependencies.neo4j.close — skips Neo4j teardown
-      3. Backend.dependencies.model.init  — skips TF model loading
-      4. Backend.dependencies.router.init — skips Ollama init
+      1. Backend.dependencies.neo4j.init  â€” skips Neo4j connection
+      2. Backend.dependencies.neo4j.close â€” skips Neo4j teardown
+      3. Backend.dependencies.model.init  â€” skips TF model loading
+      4. Backend.dependencies.router.init â€” skips Ollama init
 
     Then overrides the FastAPI `get_router` dependency so endpoints receive
     the mock router without touching any real service.
@@ -65,9 +65,9 @@ def client(mock_router_instance):
         app.dependency_overrides.clear()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # /health endpoint
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TestHealthEndpoint:
     def test_health_returns_200(self, client):
@@ -78,13 +78,13 @@ class TestHealthEndpoint:
 
     def test_health_returns_json(self, client):
         resp = client.get("/health")
-        # FastAPI always returns JSON — check content-type header
+        # FastAPI always returns JSON â€” check content-type header
         assert "application/json" in resp.headers.get("content-type", "")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # /process endpoint
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TestProcessEndpoint:
     def test_no_query_no_image_returns_400(self, client):
@@ -128,7 +128,7 @@ class TestProcessEndpoint:
 
     def test_image_with_valid_extension_calls_router(self, client, mock_router_instance):
         import io
-        # Minimal 1×1 white JPEG bytes
+        # Minimal 1Ã—1 white JPEG bytes
         tiny_jpeg = (
             b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00'
             b'\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t'

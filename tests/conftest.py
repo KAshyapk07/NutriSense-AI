@@ -1,11 +1,11 @@
-"""
+﻿"""
 Shared pytest fixtures for NutriSense-AI tests.
 
 Fixtures provided:
-  mock_llm_client   — MagicMock(spec=OllamaLLMClient) with sensible defaults
-  mock_llm_engine   — real LLMEngine wired to mock_llm_client
-  mock_neo4j        — MagicMock Neo4j client with a small in-memory recipe set
-  router            — NutriSenseRouter(neo4j=mock_neo4j, engine=mock_llm_engine)
+  mock_llm_client   â€” MagicMock(spec=OllamaLLMClient) with sensible defaults
+  mock_llm_engine   â€” real LLMEngine wired to mock_llm_client
+  mock_neo4j        â€” MagicMock Neo4j client with a small in-memory recipe set
+  router            â€” NutriSenseRouter(neo4j=mock_neo4j, engine=mock_llm_engine)
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from Src.LLM.llm_engine import LLMEngine
 from Src.Router.Router import NutriSenseRouter
 
 
-# ── LLM Client ───────────────────────────────────────────────────────────────
+# â”€â”€ LLM Client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @pytest.fixture
 def mock_llm_client():
@@ -42,15 +42,15 @@ def mock_llm_client():
     return client
 
 
-# ── LLM Engine ───────────────────────────────────────────────────────────────
+# â”€â”€ LLM Engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @pytest.fixture
 def mock_llm_engine(mock_llm_client):
-    """Real LLMEngine backed by a mocked HTTP client — no Ollama required."""
+    """Real LLMEngine backed by a mocked HTTP client â€” no Ollama required."""
     return LLMEngine(mock_llm_client)
 
 
-# ── Neo4j Client ─────────────────────────────────────────────────────────────
+# â”€â”€ Neo4j Client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 _SAMPLE_RECIPE = {
     "name": "Dal Makhani",
@@ -91,7 +91,7 @@ def mock_neo4j():
     return client
 
 
-# ── Router ───────────────────────────────────────────────────────────────────
+# â”€â”€ Router â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @pytest.fixture
 def router(mock_neo4j, mock_llm_engine):

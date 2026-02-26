@@ -27,6 +27,10 @@ async def health_check(
         ingredients=stats.get("ingredients", 0),
         cuisines=stats.get("cuisines", 0),
         image_classes=stats.get("image_classes", 0),
+        food_products=stats.get("food_products", 0),
+        brands=stats.get("brands", 0),
+        categories=stats.get("categories", 0),
+        allergen_tags=stats.get("allergen_tags", 0),
         image_model_loaded=image_model is not None,
         num_classes=image_model.num_classes,
     )

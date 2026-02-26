@@ -155,7 +155,6 @@ FORMAT YOUR RESPONSE CLEARLY WITH SECTIONS:
         Returns structured comparison for frontend.
         """
         
-        # Add estimation disclaimer if needed
         estimation_note = ""
         if is_a_estimated and is_b_estimated:
             estimation_note = "\n NOTE: Both dishes use estimated nutrition values based on typical recipes."
@@ -276,7 +275,7 @@ These values are estimates. For precise nutrition data, consult a nutritionist o
             "llm_response": response,
             "pathway": "estimation",
             "estimated": True,
-            "accuracy": 50.0,  # Lower confidence for estimates
+            "accuracy": 50.0,
             "source": "llm_estimation"
         }
 

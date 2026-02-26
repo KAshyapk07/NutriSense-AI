@@ -22,7 +22,7 @@ OUTPUT_FILE = "Dataset/processed/01_raw_scraped_recipes.csv"
 def scrape_spoonacular(num_recipes=100):
     print(f"\n--- Scraping {num_recipes} recipes from Spoonacular ---")
     if not SPOONACULAR_API_KEY:
-        print("⚠️ SPOONACULAR_API_KEY not found. Skipping Spoonacular.")
+        print("SPOONACULAR_API_KEY not found. Skipping Spoonacular.")
         return []
 
     base_url = "https://api.spoonacular.com/recipes/complexSearch"
@@ -102,7 +102,7 @@ def scrape_spoonacular(num_recipes=100):
 def scrape_edamam(target_recipes=100):
     print(f"\n--- Scraping up to {target_recipes} recipes from Edamam ---")
     if not EDAMAM_APP_ID or not EDAMAM_APP_KEY:
-        print("⚠️ EDAMAM_APP_ID or EDAMAM_APP_KEY not found. Skipping Edamam.")
+        print("EDAMAM_APP_ID or EDAMAM_APP_KEY not found. Skipping Edamam.")
         return []
 
     url = "https://api.edamam.com/api/recipes/v2"
@@ -197,7 +197,7 @@ def main():
     all_recipes.extend(scrape_edamam(target_recipes=2000)) # Fetch 2000 from Edamam
     
     if not all_recipes:
-        print("\n❌ No recipes were scraped. Check your API keys.")
+        print("\nNo recipes were scraped. Check your API keys.")
         return
 
     # 2. Convert to DataFrame
@@ -213,7 +213,7 @@ def main():
     # 4. Save to CSV
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
     df.to_csv(OUTPUT_FILE, index=False)
-    print(f"\n✅ Successfully saved {len(df)} unique recipes to {OUTPUT_FILE}")
+    print(f"\nSuccessfully saved {len(df)} unique recipes to {OUTPUT_FILE}")
     print("Next Step: Run scripts/02_scrape_instructions.py to fill in missing instructions!")
 
 if __name__ == "__main__":

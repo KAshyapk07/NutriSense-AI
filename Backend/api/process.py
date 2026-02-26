@@ -24,7 +24,6 @@ async def process(
     image: Optional[UploadFile] = File(None),
     nutri_router=Depends(get_router),
 ):
-    # Validation
     has_query = query and query.strip()
     has_image = image is not None and image.filename
 
@@ -37,7 +36,6 @@ async def process(
     image_path: Optional[str] = None
 
     try:
-        # Image handling
         if has_image:
             if not _validate_extension(image.filename):
                 raise HTTPException(
@@ -62,7 +60,6 @@ async def process(
             with open(image_path, "wb") as f:
                 f.write(contents)
 
-        # Router dispatch
         result = await nutri_router.execute_async(
             text_query=query or "",
             image_input=image_path,
@@ -76,7 +73,6 @@ async def process(
         raise HTTPException(status_code=500, detail="Internal server error.")
 
     finally:
-        # Cleanup temp file
         if image_path and os.path.exists(image_path):
             try:
                 os.remove(image_path)

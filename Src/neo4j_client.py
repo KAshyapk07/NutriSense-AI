@@ -1,4 +1,4 @@
-
+﻿
 import os
 from typing import List, Dict, Optional, Any
 from neo4j import GraphDatabase
@@ -151,15 +151,156 @@ class Neo4jClient:
             return [dict(record) for record in result]
 
     def get_stats(self) -> Dict[str, int]:
+        """Return aggregate node counts for both food clusters (used by /health endpoint)."""
         with self.driver.session() as session:
             result = session.run(
                 """
-                MATCH (r:Recipe) WITH count(r) AS recipes
-                MATCH (i:Ingredient) WITH recipes, count(i) AS ingredients
-                MATCH (c:Cuisine) WITH recipes, ingredients, count(c) AS cuisines
-                MATCH (ic:ImageClass) WITH recipes, ingredients, cuisines, count(ic) AS image_classes
-                RETURN recipes, ingredients, cuisines, image_classes
+                MATCH (r:Recipe)       WITH count(r)  AS recipes
+                MATCH (i:Ingredient)   WITH recipes,  count(i)  AS ingredients
+                MATCH (c:Cuisine)      WITH recipes,  ingredients, count(c)  AS cuisines
+                MATCH (ic:ImageClass)  WITH recipes,  ingredients, cuisines,  count(ic) AS image_classes
+                MATCH (fp:FoodProduct) WITH recipes,  ingredients, cuisines,  image_classes, count(fp) AS food_products
+                MATCH (b:Brand)        WITH recipes,  ingredients, cuisines,  image_classes, food_products, count(b) AS brands
+                MATCH (cat:Category)   WITH recipes,  ingredients, cuisines,  image_classes, food_products, brands, count(cat) AS categories
+                MATCH (at:AllergenTag) WITH recipes,  ingredients, cuisines,  image_classes, food_products, brands, categories, count(at) AS allergen_tags
+                RETURN recipes, ingredients, cuisines, image_classes,
+                       food_products, brands, categories, allergen_tags
                 """
             )
             record = result.single()
-            return dict(record) if record else {"recipes": 0, "ingredients": 0, "cuisines": 0, "image_classes": 0}
+            return dict(record) if record else {
+                "recipes": 0, "ingredients": 0, "cuisines": 0, "image_classes": 0,
+                "food_products": 0, "brands": 0, "categories": 0, "allergen_tags": 0,
+            }
+
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Cluster B â€” FoodProduct queries
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    def search_products_by_name(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Full-text search against the product_name_fulltext index (Cluster B)."""
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                CALL db.index.fulltext.queryNodes('product_name_fulltext', $query)
+                YIELD node, score
+                ORDER BY score DESC
+                LIMIT $limit
+                OPTIONAL MATCH (node)-[:MADE_BY]->(b:Brand)
+                OPTIONAL MATCH (node)-[:IN_CATEGORY]->(cat:Category)
+                RETURN
+                    node.id               AS id,
+                    node.name             AS name,
+                    node.generic_name     AS generic_name,
+                    node.brand            AS brand,
+                    node.category         AS category,
+                    node.serving_size     AS serving_size,
+                    node.serving_quantity AS serving_quantity,
+                    node.nova_group       AS nova_group,
+                    node.nutriscore_grade AS nutriscore_grade,
+                    node.calories_100g    AS calories_100g,
+                    node.fat_100g         AS fat_100g,
+                    node.saturated_fat_100g AS saturated_fat_100g,
+                    node.carbohydrates_100g AS carbohydrates_100g,
+                    node.sugars_100g      AS sugars_100g,
+                    node.fiber_100g       AS fiber_100g,
+                    node.proteins_100g    AS proteins_100g,
+                    node.sodium_100g      AS sodium_100g,
+                    node.calcium_100g     AS calcium_100g,
+                    node.iron_100g        AS iron_100g,
+                    node.vitamin_c_100g   AS vitamin_c_100g,
+                    node.folate_100g      AS folate_100g,
+                    node.image_url        AS image_url,
+                    b.name                AS brand_node,
+                    cat.name              AS category_node,
+                    score                 AS search_score
+                ORDER BY score DESC
+                """,
+                query=query, limit=limit,
+            )
+            return [dict(r) for r in result]
+
+    def get_product_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+        """Case-insensitive substring match on FoodProduct.name (Cluster B)."""
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (fp:FoodProduct)
+                WHERE toLower(fp.name) CONTAINS toLower($name)
+                OPTIONAL MATCH (fp)-[:MADE_BY]->(b:Brand)
+                OPTIONAL MATCH (fp)-[:IN_CATEGORY]->(cat:Category)
+                RETURN
+                    fp.id               AS id,
+                    fp.name             AS name,
+                    fp.generic_name     AS generic_name,
+                    fp.brand            AS brand,
+                    fp.category         AS category,
+                    fp.serving_size     AS serving_size,
+                    fp.serving_quantity AS serving_quantity,
+                    fp.nova_group       AS nova_group,
+                    fp.nutriscore_grade AS nutriscore_grade,
+                    fp.calories_100g    AS calories_100g,
+                    fp.fat_100g         AS fat_100g,
+                    fp.saturated_fat_100g AS saturated_fat_100g,
+                    fp.carbohydrates_100g AS carbohydrates_100g,
+                    fp.sugars_100g      AS sugars_100g,
+                    fp.fiber_100g       AS fiber_100g,
+                    fp.proteins_100g    AS proteins_100g,
+                    fp.sodium_100g      AS sodium_100g,
+                    fp.calcium_100g     AS calcium_100g,
+                    fp.iron_100g        AS iron_100g,
+                    fp.vitamin_c_100g   AS vitamin_c_100g,
+                    fp.folate_100g      AS folate_100g,
+                    fp.image_url        AS image_url,
+                    b.name              AS brand_node,
+                    cat.name            AS category_node
+                LIMIT 1
+                """,
+                name=name,
+            )
+            record = result.single()
+            return dict(record) if record else None
+
+    def get_all_product_names(self) -> List[Dict[str, str]]:
+        """Return all FoodProduct names (used by fuzzy lookup layer)."""
+        with self.driver.session() as session:
+            result = session.run(
+                "MATCH (fp:FoodProduct) RETURN fp.id AS id, fp.name AS name, fp.brand AS brand"
+            )
+            return [dict(r) for r in result]
+
+    def get_products_by_category(self, category: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Return products belonging to a given Category node (Cluster B)."""
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (fp:FoodProduct)-[:IN_CATEGORY]->(cat:Category {name: $category})
+                OPTIONAL MATCH (fp)-[:MADE_BY]->(b:Brand)
+                RETURN fp.id AS id, fp.name AS name, fp.brand AS brand,
+                       fp.calories_100g AS calories_100g, fp.proteins_100g AS proteins_100g,
+                       fp.carbohydrates_100g AS carbohydrates_100g, fp.fat_100g AS fat_100g,
+                       fp.nutriscore_grade AS nutriscore_grade, b.name AS brand_node
+                LIMIT $limit
+                """,
+                category=category, limit=limit,
+            )
+            return [dict(r) for r in result]
+
+    def get_allergen_info(self, item_name: str, is_product: bool = False) -> List[str]:
+        """
+        Return list of AllergenTag names for a Recipe or FoodProduct.
+        Traverses: (node)-[:CONTAINS]->(Ingredient)-[:IS_ALLERGEN]->(AllergenTag)
+        """
+        label = "FoodProduct" if is_product else "Recipe"
+        with self.driver.session() as session:
+            result = session.run(
+                f"""
+                MATCH (n:{label})
+                WHERE toLower(n.name) CONTAINS toLower($name)
+                MATCH (n)-[:CONTAINS]->(i:Ingredient)-[:IS_ALLERGEN]->(a:AllergenTag)
+                RETURN DISTINCT a.name AS allergen
+                ORDER BY allergen
+                """,
+                name=item_name,
+            )
+            return [r["allergen"] for r in result]
