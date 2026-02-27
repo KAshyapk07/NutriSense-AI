@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from Backend.api import health as health_api
 from Backend.api import process as process_api
+from Backend.api import search as search_api
 from Backend.core.config import settings
 from Backend.core.lifespan import lifespan
 
@@ -41,6 +42,7 @@ app.add_middleware(
 # Routers
 app.include_router(process_api.router)
 app.include_router(health_api.router)
+app.include_router(search_api.router)
 
 
 # Exception handlers

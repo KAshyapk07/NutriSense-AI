@@ -8,6 +8,7 @@ from Backend.core.config import settings
 from Backend.dependencies import neo4j as neo4j_dep
 from Backend.dependencies import model as model_dep
 from Backend.dependencies import router as router_dep
+from Backend.dependencies import graph_rag as graph_rag_dep
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,9 @@ async def lifespan(app: FastAPI):
     neo4j_dep.init()
     model_dep.init()
     router_dep.init()
+
+    # Phase 3 — GraphRAG: initialise embedding model + vector search service
+    graph_rag_dep.init(neo4j_dep.get_neo4j_client())
 
     logger.info("Startup complete. Ready to serve requests.")
 

@@ -6,7 +6,37 @@ import re
 import traceback
 
 from Src.Pathway_1.pathway1 import pathway_1_lookup as search_recipe
+from Src.Pathway_1.pathway1_products import pathway_1_product_lookup as search_product
 from Src.neo4j_client import Neo4jClient
+
+# ── Product / packaged-food detection keywords ─────────────────────────────
+# If a dish name contains any of these tokens we prefer the FoodProduct cluster.
+# Only include packaging/commercial terms — NOT ingredients that also appear in
+# home-cooked Indian recipes (e.g. paneer, butter, ghee, oil).
+PRODUCT_KEYWORDS: set[str] = {
+    # Packaging / format signals
+    "packet", "packaged", "brand", "bottle", "can", "tin", "box",
+    "sachet", "pouch",
+    # Commercial-only product categories
+    "chips", "biscuit", "biscuits", "cookie", "cookies", "cereal",
+    "instant",                         # "instant noodles", "instant oats"
+    "ready",                           # "ready-to-eat"
+    "chocolate", "candy", "toffee",
+    "juice", "drink", "soda", "cola",  # beverages
+    "energy drink",
+    "sauce", "ketchup", "jam",         # processed condiments (not curry-sauce)
+    "spread",
+    "powder",                          # protein powder, health drink powder
+    "snack",
+}
+
+# Known Indian + global brand indicators (a subset used for fast detection)
+BRAND_INDICATORS: set[str] = {
+    "amul", "britannia", "maggi", "nestle", "unilever",
+    "parle", "haldirams", "haldiram", "lays", "kellogs",
+    "kelloggs", "patanjali", "dabur", "mother dairy", "anand",
+    "itc", "mondelez", "cadbury", "pepsico", "coca cola",
+}
 
 
 COMPARE_PATTERNS = [
@@ -31,6 +61,34 @@ class NutriSenseRouter:
         self.neo4j_client = neo4j_client
         self.engine = llm_engine
         self.image_model = image_model
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Cluster detection helpers
+    # ─────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _detect_cluster(dish_name: str) -> str:
+        """
+        Heuristic: return "product" if the dish name looks like a packaged
+        food brand / commercial item, otherwise return "recipe".
+        """
+        tokens = set(dish_name.lower().split())
+        if tokens & BRAND_INDICATORS:
+            return "product"
+        if tokens & PRODUCT_KEYWORDS:
+            return "product"
+        return "recipe"
+
+    def _lookup_by_cluster(self, name: str, cluster: str) -> dict:
+        """Dispatch to the correct pathway based on *cluster*."""
+        if cluster == "product":
+            return search_product(name, self.neo4j_client)
+        return search_recipe(name, self.neo4j_client)
+
+    async def _async_lookup_by_cluster(self, name: str, cluster: str) -> dict:
+        if cluster == "product":
+            return await asyncio.to_thread(search_product, name, self.neo4j_client)
+        return await asyncio.to_thread(search_recipe, name, self.neo4j_client)
 
     def _rule_based_classify(self, query: str):
         q = query.lower().strip()
@@ -202,10 +260,18 @@ Return ONLY valid JSON (no markdown, no explanation):
             if not name or name.strip() == "":
                 return self.engine.estimate_nutrition("general healthy meal")
 
-            res = search_recipe(name, self.neo4j_client)
+            # Detect cluster and route to the appropriate lookup
+            cluster = self._detect_cluster(name)
+            res = self._lookup_by_cluster(name, cluster)
+
+            # If product cluster returns NOT_FOUND, fall back to recipe cluster
+            if cluster == "product" and (not res or res.get("status") != "FOUND"):
+                res = search_recipe(name, self.neo4j_client)
+                cluster = "recipe"
 
             if res and res.get('status') == "FOUND" and res.get('results'):
                 out = res['results'][0].copy()
+                out['cluster'] = res.get('cluster', cluster)
                 if override_conf is not None:
                     out['accuracy'] = float(override_conf * 100)
                 elif 'confidence' in out:
@@ -256,24 +322,39 @@ Return ONLY valid JSON (no markdown, no explanation):
                     'llm_response': 'Please specify two dishes to compare.'
                 }
 
-            res_a = search_recipe(dishes[0], self.neo4j_client)
+            # Detect cluster for each dish (enables cross-cluster comparisons)
+            cluster_a = self._detect_cluster(dishes[0])
+            cluster_b = self._detect_cluster(dishes[1])
+
+            res_a = self._lookup_by_cluster(dishes[0], cluster_a)
+            # If product search fails, fall back to recipe
+            if cluster_a == "product" and (not res_a or res_a.get("status") != "FOUND"):
+                res_a = search_recipe(dishes[0], self.neo4j_client)
+                cluster_a = "recipe"
+
             found_a = res_a and res_a.get('status') == "FOUND" and res_a.get('results')
 
             if found_a:
-                dish_a_name = res_a['results'][0].get('recipe_name', dishes[0])
-                nutrition_a = res_a['results'][0].get('nutrition', {})
+                r0 = res_a['results'][0]
+                dish_a_name = r0.get('recipe_name') or r0.get('product_name', dishes[0])
+                nutrition_a = r0.get('nutrition', {})
                 is_a_estimated = False
             else:
                 dish_a_name = dishes[0]
                 nutrition_a = self.engine.estimate_single_dish_nutrition(dishes[0])
                 is_a_estimated = True
 
-            res_b = search_recipe(dishes[1], self.neo4j_client)
+            res_b = self._lookup_by_cluster(dishes[1], cluster_b)
+            if cluster_b == "product" and (not res_b or res_b.get("status") != "FOUND"):
+                res_b = search_recipe(dishes[1], self.neo4j_client)
+                cluster_b = "recipe"
+
             found_b = res_b and res_b.get('status') == "FOUND" and res_b.get('results')
 
             if found_b:
-                dish_b_name = res_b['results'][0].get('recipe_name', dishes[1])
-                nutrition_b = res_b['results'][0].get('nutrition', {})
+                r1 = res_b['results'][0]
+                dish_b_name = r1.get('recipe_name') or r1.get('product_name', dishes[1])
+                nutrition_b = r1.get('nutrition', {})
                 is_b_estimated = False
             else:
                 dish_b_name = dishes[1]
@@ -350,10 +431,17 @@ Return ONLY valid JSON (no markdown, no explanation):
             if not name or name.strip() == "":
                 return await self.engine.estimate_nutrition_async("general healthy meal")
 
-            res = await asyncio.to_thread(search_recipe, name, self.neo4j_client)
+            cluster = self._detect_cluster(name)
+            res = await self._async_lookup_by_cluster(name, cluster)
+
+            # Fall back to recipe cluster if product search misses
+            if cluster == "product" and (not res or res.get("status") != "FOUND"):
+                res = await asyncio.to_thread(search_recipe, name, self.neo4j_client)
+                cluster = "recipe"
 
             if res and res.get("status") == "FOUND" and res.get("results"):
                 out = res["results"][0].copy()
+                out["cluster"] = res.get("cluster", cluster)
                 if override_conf is not None:
                     out["accuracy"] = float(override_conf * 100)
                 elif "confidence" in out:
@@ -404,17 +492,27 @@ Return ONLY valid JSON (no markdown, no explanation):
                     "llm_response": "Please specify two dishes to compare.",
                 }
 
+            cluster_a = self._detect_cluster(dishes[0])
+            cluster_b = self._detect_cluster(dishes[1])
+
             res_a, res_b = await asyncio.gather(
-                asyncio.to_thread(search_recipe, dishes[0], self.neo4j_client),
-                asyncio.to_thread(search_recipe, dishes[1], self.neo4j_client),
+                self._async_lookup_by_cluster(dishes[0], cluster_a),
+                self._async_lookup_by_cluster(dishes[1], cluster_b),
             )
+
+            # Fallbacks if product cluster misses
+            if cluster_a == "product" and (not res_a or res_a.get("status") != "FOUND"):
+                res_a = await asyncio.to_thread(search_recipe, dishes[0], self.neo4j_client)
+            if cluster_b == "product" and (not res_b or res_b.get("status") != "FOUND"):
+                res_b = await asyncio.to_thread(search_recipe, dishes[1], self.neo4j_client)
 
             found_a = res_a and res_a.get("status") == "FOUND" and res_a.get("results")
             found_b = res_b and res_b.get("status") == "FOUND" and res_b.get("results")
 
             if found_a:
-                dish_a_name = res_a["results"][0].get("recipe_name", dishes[0])
-                nutrition_a = res_a["results"][0].get("nutrition", {})
+                r0 = res_a["results"][0]
+                dish_a_name = r0.get("recipe_name") or r0.get("product_name", dishes[0])
+                nutrition_a = r0.get("nutrition", {})
                 is_a_estimated = False
             else:
                 dish_a_name = dishes[0]
@@ -422,8 +520,9 @@ Return ONLY valid JSON (no markdown, no explanation):
                 is_a_estimated = True
 
             if found_b:
-                dish_b_name = res_b["results"][0].get("recipe_name", dishes[1])
-                nutrition_b = res_b["results"][0].get("nutrition", {})
+                r1 = res_b["results"][0]
+                dish_b_name = r1.get("recipe_name") or r1.get("product_name", dishes[1])
+                nutrition_b = r1.get("nutrition", {})
                 is_b_estimated = False
             else:
                 dish_b_name = dishes[1]

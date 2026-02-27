@@ -17,6 +17,9 @@ python-multipart>=0.0.9
 # Recipe fuzzy matching
 rapidfuzz==3.6.2
 
+# Vector embeddings (Phase 3 — GraphRAG)
+sentence-transformers>=2.5.0
+
 # Neo4j knowledge graph
 neo4j>=5.18.0
 python-dotenv>=1.0.1
