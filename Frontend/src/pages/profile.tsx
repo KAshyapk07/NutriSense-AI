@@ -72,7 +72,7 @@ export default function Profile() {
 
       <Header />
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-12 py-8 space-y-8">
+      <main className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-16 py-8 space-y-8">
 
         {/* ── Avatar + guest banner ── */}
         <motion.section

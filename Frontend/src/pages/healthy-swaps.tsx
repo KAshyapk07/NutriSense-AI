@@ -41,7 +41,10 @@ export default function HealthySwapsPage() {
   return (
     <div className="min-h-screen bg-[var(--color-bg)]">
       <Header />
-      <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-12 py-14">
+      <main className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-16 py-14">
+        <div className="flex gap-12 xl:gap-16 items-start">
+          {/* ── Left: form column ── */}
+          <div className="flex-1 min-w-0">
         {/* Heading */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -165,6 +168,48 @@ export default function HealthySwapsPage() {
           Browse low-calorie dishes in the graph database
           <ArrowRight size={13} />
         </motion.button>
+          </div>{/* end form column */}
+
+          {/* ── Right: desktop info panel ── */}
+          <aside className="hidden xl:flex flex-col gap-5 w-80 flex-shrink-0 pt-16">
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-green-500 mb-4">What makes a healthy swap?</h3>
+              <ul className="space-y-2.5">
+                {[
+                  'Lower calorie density per serving',
+                  'Higher fibre for better satiety',
+                  'Reduced saturated fat',
+                  'Lower glycaemic index',
+                  'More micronutrients (iron, calcium, vitamins)',
+                  'Less sodium and free sugars',
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-sm">
+                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0 bg-green-500 opacity-70" />
+                    <span className="text-[var(--color-text-muted)] leading-snug">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-4">Popular swaps</h3>
+              <div className="space-y-2">
+                {[
+                  { from: 'White Rice', to: 'Brown Rice / Quinoa' },
+                  { from: 'Puri', to: 'Chapati / Tandoori Roti' },
+                  { from: 'Fried Samosa', to: 'Baked Samosa / Dhokla' },
+                  { from: 'Gulab Jamun', to: 'Fruit Chaat' },
+                  { from: 'Cream Curry', to: 'Tomato-based Curry' },
+                ].map(({ from, to }) => (
+                  <div key={from} className="flex items-center gap-2 text-xs">
+                    <span className="text-[var(--color-text-muted)]">{from}</span>
+                    <span className="text-green-500">→</span>
+                    <span className="font-medium text-[var(--color-text)]">{to}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </div>{/* end flex row */}
       </main>
     </div>
   )

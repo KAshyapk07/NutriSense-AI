@@ -157,7 +157,7 @@ export default function ProductChatPage() {
     <div className="flex flex-col min-h-screen bg-[var(--color-bg)]">
       <Header />
 
-      <main className="flex-1 mx-auto w-full max-w-screen-xl px-6 sm:px-8 lg:px-12 pt-6 pb-40">
+      <main className="flex-1 mx-auto w-full max-w-screen-2xl px-6 sm:px-8 lg:px-16 pt-6 pb-40">
         {/* ── Back button ── */}
         <button
           onClick={() => navigate(-1)}
@@ -268,7 +268,7 @@ export default function ProductChatPage() {
       <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
         <form
           onSubmit={(e: FormEvent) => { e.preventDefault(); handleSend() }}
-          className="mx-auto max-w-4xl px-6 sm:px-8 py-3"
+          className="mx-auto max-w-screen-2xl px-6 sm:px-8 lg:px-16 py-3"
         >
           <div
             className={cn(

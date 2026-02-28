@@ -143,7 +143,7 @@ export default function Settings() {
 
       <Header />
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-12 py-8 space-y-7">
+      <main className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-16 py-8 space-y-7">
 
         {/* ── Appearance ── */}
         <motion.div variants={fadeUp} custom={0} initial="hidden" animate="show">

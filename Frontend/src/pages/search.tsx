@@ -148,7 +148,7 @@ export default function SearchPage() {
     <div className="min-h-screen bg-[var(--color-bg)]">
       <Header onSearch={handleNewSearch} defaultQuery={q} />
 
-      <div className="mx-auto max-w-screen-xl px-6 sm:px-8 lg:px-12 py-8">
+      <div className="mx-auto max-w-screen-2xl px-6 sm:px-8 lg:px-16 py-8">
         {/* -- Page header -- */}
         <div className="flex items-center justify-between mb-6 gap-4">
           <div>
@@ -251,7 +251,7 @@ export default function SearchPage() {
             {recipeResults.length > 0 && (
               <div>
                 <SectionHeading icon={UtensilsCrossed} label="Recipes" count={recipeResults.length} />
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
                   {recipeResults.map((result, i) => (
                     <SearchResultCard
                       key={result.id}

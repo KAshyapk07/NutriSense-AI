@@ -48,7 +48,10 @@ export default function ModifyPage() {
   return (
     <div className="min-h-screen bg-[var(--color-bg)]">
       <Header />
-      <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-12 py-14">
+      <main className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-16 py-14">
+        <div className="flex gap-12 xl:gap-16 items-start">
+          {/* ── Left: form column ── */}
+          <div className="flex-1 min-w-0">
         {/* Heading */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -151,6 +154,46 @@ export default function ModifyPage() {
             Modify with AI
           </button>
         </motion.form>
+          </div>{/* end form column */}
+
+          {/* ── Right: desktop info panel ── */}
+          <aside className="hidden xl:flex flex-col gap-5 w-80 flex-shrink-0 pt-16">
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)] mb-4">What AI can modify</h3>
+              <ul className="space-y-2.5">
+                {[
+                  'Swap high-calorie ingredients',
+                  'Adjust cooking method (bake vs fry)',
+                  'Convert to vegan or vegetarian',
+                  'Remove allergens like gluten or dairy',
+                  'Increase protein content',
+                  'Reduce sodium for heart health',
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-sm">
+                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0 bg-[var(--color-accent)] opacity-70" />
+                    <span className="text-[var(--color-text-muted)] leading-snug">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-4">Example queries</h3>
+              <div className="space-y-2">
+                {[
+                  { dish: 'Butter Chicken', constraint: 'vegan' },
+                  { dish: 'Biryani', constraint: 'low-calorie' },
+                  { dish: 'Samosa', constraint: 'baked, gluten-free' },
+                  { dish: 'Gulab Jamun', constraint: 'sugar-free' },
+                ].map(({ dish, constraint }) => (
+                  <div key={dish} className="rounded-lg bg-[var(--color-bg)] px-3 py-2 text-xs">
+                    <span className="font-medium text-[var(--color-text)]">{dish}</span>
+                    <span className="text-[var(--color-text-muted)]"> → {constraint}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </div>{/* end flex row */}
       </main>
     </div>
   )

@@ -48,7 +48,10 @@ export default function ComparePage() {
   return (
     <div className="min-h-screen bg-[var(--color-bg)]">
       <Header />
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-12 py-14">
+      <main className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-16 py-14">
+        <div className="flex gap-12 xl:gap-16 items-start">
+          {/* ── Left: form column ── */}
+          <div className="flex-1 min-w-0">
         {/* Heading */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -139,6 +142,49 @@ export default function ComparePage() {
             </button>
           </div>
         </motion.form>
+          </div>{/* end form column */}
+
+          {/* ── Right: desktop info panel ── */}
+          <aside className="hidden xl:flex flex-col gap-5 w-80 flex-shrink-0 pt-16">
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)] mb-4">How it works</h3>
+              <ol className="space-y-4">
+                {[
+                  { step: '01', text: 'Enter any two dishes, recipes, or packaged products' },
+                  { step: '02', text: 'AI fetches nutritional data from the knowledge graph' },
+                  { step: '03', text: 'Get a side-by-side breakdown with a health recommendation' },
+                ].map(({ step, text }) => (
+                  <li key={step} className="flex gap-3 text-sm">
+                    <span className="font-bold text-[var(--color-accent)] flex-shrink-0">{step}</span>
+                    <span className="text-[var(--color-text-muted)] leading-relaxed">{text}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-4">Database coverage</h3>
+              <div className="space-y-3">
+                {[
+                  { label: 'Indian recipes', value: '725+' },
+                  { label: 'Packaged products', value: '6,400+' },
+                  { label: 'Nutrients tracked', value: '15' },
+                  { label: 'Regional cuisines', value: '54' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex justify-between items-center text-sm">
+                    <span className="text-[var(--color-text-muted)]">{label}</span>
+                    <span className="font-semibold text-[var(--color-text)] tabular-nums">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-3">Tip</h3>
+              <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+                If a dish isn&apos;t in the database, the AI will estimate its nutrition from training knowledge and clearly mark it as estimated.
+              </p>
+            </div>
+          </aside>
+        </div>{/* end flex row */}
       </main>
     </div>
   )

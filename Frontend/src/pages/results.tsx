@@ -247,6 +247,7 @@ export default function Results() {
   const [inputValue, setInputValue] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const initialQuerySent = useRef(false)
 
   /* ── Send a query ── */
   const sendQuery = useCallback(async (query: string, imageFile?: File) => {
@@ -289,8 +290,10 @@ export default function Results() {
 
   /* ── Seed from navigation state on mount ── */
   useEffect(() => {
+    if (initialQuerySent.current) return   // guard against React StrictMode double-invoke
     const state = location.state as { query?: string; image?: File } | null
     if (state?.query || state?.image) {
+      initialQuerySent.current = true
       sendQuery(state.query ?? '', state.image)
       // Clear state so refresh doesn't re-trigger
       window.history.replaceState({}, '')
@@ -336,7 +339,7 @@ export default function Results() {
       <Header />
 
       {/* ── Message thread ── */}
-      <main className="flex-1 mx-auto w-full max-w-screen-xl px-6 sm:px-8 lg:px-12 pt-8 pb-36">
+      <main className="flex-1 mx-auto w-full max-w-screen-2xl px-6 sm:px-8 lg:px-16 pt-8 pb-36">
         <div className="flex flex-col gap-10">
           {messages.map((msg) => (
             <div key={msg.id} className="flex flex-col gap-4">
@@ -377,7 +380,7 @@ export default function Results() {
       <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
         <form
           onSubmit={handleSubmit}
-          className="mx-auto max-w-screen-xl px-6 sm:px-8 lg:px-12 py-3"
+          className="mx-auto max-w-screen-2xl px-6 sm:px-8 lg:px-16 py-3"
         >
           <div
             className={cn(
