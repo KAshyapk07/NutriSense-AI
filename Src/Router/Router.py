@@ -271,6 +271,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
             if res and res.get('status') == "FOUND" and res.get('results'):
                 out = res['results'][0].copy()
+                out['pathway'] = 'extraction'
                 out['cluster'] = res.get('cluster', cluster)
                 if override_conf is not None:
                     out['accuracy'] = float(override_conf * 100)
@@ -278,6 +279,18 @@ Return ONLY valid JSON (no markdown, no explanation):
                     out['accuracy'] = float(out['confidence'] * 100)
                 else:
                     out['accuracy'] = 85.0
+
+                # Include up to 3 variant results for top-N display
+                variants = []
+                for r in res['results'][1:4]:
+                    v = r.copy()
+                    v['pathway'] = 'extraction'
+                    v['cluster'] = res.get('cluster', cluster)
+                    if 'confidence' in v:
+                        v['accuracy'] = float(v['confidence'] * 100)
+                    variants.append(v)
+                out['variants'] = variants
+
                 return out
 
             return self.engine.estimate_nutrition(name)
@@ -441,6 +454,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
             if res and res.get("status") == "FOUND" and res.get("results"):
                 out = res["results"][0].copy()
+                out["pathway"] = "extraction"
                 out["cluster"] = res.get("cluster", cluster)
                 if override_conf is not None:
                     out["accuracy"] = float(override_conf * 100)
@@ -448,6 +462,18 @@ Return ONLY valid JSON (no markdown, no explanation):
                     out["accuracy"] = float(out["confidence"] * 100)
                 else:
                     out["accuracy"] = 85.0
+
+                # Include up to 3 variant results for top-N display
+                variants = []
+                for r in res["results"][1:4]:
+                    v = r.copy()
+                    v["pathway"] = "extraction"
+                    v["cluster"] = res.get("cluster", cluster)
+                    if "confidence" in v:
+                        v["accuracy"] = float(v["confidence"] * 100)
+                    variants.append(v)
+                out["variants"] = variants
+
                 return out
 
             return await self.engine.estimate_nutrition_async(name)

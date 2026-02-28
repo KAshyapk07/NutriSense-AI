@@ -55,10 +55,10 @@ export function ComparisonView({ data, className }: ComparisonViewProps) {
           transition={{ delay: 0.3, duration: 0.4 }}
           className="mt-8 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6"
         >
-          <h3 className="text-sm font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-4">
+          <h3 className="text-base font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-4">
             Comparison Analysis
           </h3>
-          <div className="text-sm leading-relaxed text-[var(--color-text)] whitespace-pre-line">
+          <div className="text-base leading-relaxed text-[var(--color-text)] whitespace-pre-line">
             {data.llm_response}
           </div>
         </motion.div>

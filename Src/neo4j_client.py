@@ -41,12 +41,12 @@ class Neo4jClient:
         with self.driver.session() as session:
             result = session.run(
                 """
-                CALL db.index.fulltext.queryNodes('recipe_name_fulltext', $query)
+                CALL db.index.fulltext.queryNodes('recipe_name_fulltext', $search_term)
                 YIELD node, score
                 WITH node, score
                 ORDER BY score DESC
                 LIMIT $limit
-                MATCH (node)-[:BELONGS_TO]->(c:Cuisine)
+                OPTIONAL MATCH (node)-[:BELONGS_TO]->(c:Cuisine)
                 RETURN 
                     node.id AS id,
                     node.name AS recipe_original,
@@ -70,7 +70,7 @@ class Neo4jClient:
                     score AS search_score
                 ORDER BY score DESC
                 """,
-                query=query, limit=limit
+                search_term=query, limit=limit
             )
             recipes = []
             for record in result:
@@ -182,7 +182,7 @@ class Neo4jClient:
         with self.driver.session() as session:
             result = session.run(
                 """
-                CALL db.index.fulltext.queryNodes('product_name_fulltext', $query)
+                CALL db.index.fulltext.queryNodes('product_name_fulltext', $search_term)
                 YIELD node, score
                 ORDER BY score DESC
                 LIMIT $limit
@@ -216,7 +216,7 @@ class Neo4jClient:
                     score                 AS search_score
                 ORDER BY score DESC
                 """,
-                query=query, limit=limit,
+                search_term=query, limit=limit,
             )
             return [dict(r) for r in result]
 

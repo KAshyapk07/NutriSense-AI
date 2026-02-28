@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils'
 
 export function SkeletonLoader({ className }: { className?: string }) {
   return (
-    <div className={cn('w-full max-w-2xl mx-auto space-y-6 animate-fade-in', className)}>
+    <div className={cn('w-full max-w-4xl mx-auto space-y-6 animate-fade-in', className)}>
       {/* Title skeleton */}
       <div className="space-y-3">
         <div className="h-8 w-48 rounded-lg bg-[var(--color-border)] animate-pulse-subtle" />

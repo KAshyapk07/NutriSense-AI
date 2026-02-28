@@ -1,26 +1,54 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Menu, Camera } from 'lucide-react'
 import { SearchBar } from '@/components/ui/search-bar'
 import { Logo } from '@/components/ui/logo'
 import { SteamEffect } from '@/components/ui/steam-effect'
+import { ImageDropZone } from '@/components/ui/image-drop-zone'
+import { useSidebar } from '@/hooks/use-sidebar'
 import landingBg from '@/assets/landing-bg.png'
 
 const CHIPS = [
-  { label: 'Sambar', query: 'Sambar' },
-  { label: 'Compare Dosa vs Idli', query: 'Compare Dosa vs Idli' },
-  { label: 'Vegan Butter Chicken', query: 'Vegan Butter Chicken' },
-  { label: 'Low calorie Dal', query: 'Low calorie Dal' },
+  { label: 'Sambar', query: 'Sambar', mode: 'search' },
+  { label: 'Compare Dosa vs Idli', query: 'Compare Dosa vs Idli', mode: 'chat' },
+  { label: 'Vegan Butter Chicken', query: 'Vegan Butter Chicken', mode: 'chat' },
+  { label: 'Low calorie Dal', query: 'Low calorie Dal', mode: 'search' },
 ]
 
 export default function Home() {
   const navigate = useNavigate()
+  const { openSidebar } = useSidebar()
+  const [showDropZone, setShowDropZone] = useState(false)
+  const [pendingImage, setPendingImage] = useState<File | null>(null)
 
   const handleSearch = (query: string, image?: File) => {
-    navigate('/results', { state: { query, image } })
+    const img = image ?? pendingImage ?? undefined
+    if (img) {
+      navigate('/results', { state: { query, image: img } })
+    } else {
+      navigate(`/search?q=${encodeURIComponent(query)}`)
+    }
+  }
+
+  const handleImageSelect = (file: File) => {
+    setPendingImage(file)
+    // Navigate immediately for image-only analysis
+    navigate('/results', { state: { query: '', image: file } })
   }
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden">
+
+      {/* ── Hamburger — top-left, opens sidebar ── */}
+      <button
+        onClick={openSidebar}
+        aria-label="Open navigation"
+        className="absolute top-4 left-4 z-30 flex h-10 w-10 items-center justify-center rounded-lg
+          text-white/60 hover:text-white hover:bg-white/10 transition-colors duration-150"
+      >
+        <Menu size={22} strokeWidth={1.75} />
+      </button>
 
       {/* ── Background image — full bleed, high visibility ── */}
       <div
@@ -95,6 +123,42 @@ export default function Home() {
           />
         </motion.div>
 
+        {/* Image upload toggle */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.75, duration: 0.5 }}
+          className="mt-3 w-full max-w-2xl"
+        >
+          <button
+            onClick={() => setShowDropZone((v) => !v)}
+            className="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/8 backdrop-blur-md px-3.5 py-1.5 text-xs font-medium text-white/55 hover:bg-white/15 hover:text-white/75 hover:border-white/35 transition-all duration-200 mx-auto"
+          >
+            <Camera size={13} strokeWidth={1.5} />
+            {showDropZone ? 'Hide image upload' : 'Analyse a food photo'}
+          </button>
+
+          <AnimatePresence>
+            {showDropZone && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="rounded-2xl overflow-hidden border border-white/15 backdrop-blur-xl bg-black/30">
+                  <ImageDropZone
+                    onImageSelect={handleImageSelect}
+                    onClear={() => setPendingImage(null)}
+                    variant="full"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
         {/* Suggestion chips */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -108,7 +172,11 @@ export default function Home() {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.95 + i * 0.07, duration: 0.3 }}
-              onClick={() => handleSearch(chip.query)}
+              onClick={() =>
+                chip.mode === 'chat'
+                  ? navigate('/results', { state: { query: chip.query } })
+                  : handleSearch(chip.query)
+              }
               className="rounded-full border border-white/20 bg-white/10 backdrop-blur-md
                 px-4 py-1.5 text-xs font-medium text-white/65
                 hover:bg-white/18 hover:text-white hover:border-white/40
@@ -121,8 +189,9 @@ export default function Home() {
       </div>
 
       {/* ── Corner watermark blocker (bottom-right) ── */}
-      <div className="absolute bottom-0 right-0 z-30 w-52 h-20
-        bg-gradient-to-tl from-black from-40% via-black/95 via-60% to-transparent" />
+      <div className="absolute bottom-0 right-0 z-30 w-72 h-28
+        bg-gradient-to-tl from-black from-50% via-black/95 via-70% to-transparent" />
+      <div className="absolute bottom-0 right-0 z-31 w-48 h-16 bg-black" />
 
     </div>
   )

@@ -73,7 +73,18 @@ async def semantic_search(
         logger.exception("GraphRAG search failed: %s", exc)
         raise HTTPException(status_code=500, detail="Search failed. Please try again.")
 
-    results = [SearchResult(**r) for r in raw_results]
+    # Filter out any records missing required fields before Pydantic validation
+    valid_raw = [
+        r for r in raw_results
+        if r.get("id") is not None and r.get("name") is not None
+    ]
+
+    results = []
+    for r in valid_raw:
+        try:
+            results.append(SearchResult(**r))
+        except Exception as exc:
+            logger.warning("Skipping malformed search result: %s — %s", r.get("name"), exc)
 
     # Surface available health tags for the UI
     try:

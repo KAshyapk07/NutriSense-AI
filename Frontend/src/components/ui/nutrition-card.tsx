@@ -56,7 +56,7 @@ function CollapsibleSection({
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between px-6 py-4 text-left hover:bg-[var(--color-bg)] transition-colors"
       >
-        <span className="text-sm font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+        <span className="text-base font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
           {title}
         </span>
         <motion.div
@@ -75,7 +75,7 @@ function CollapsibleSection({
         transition={{ duration: 0.25, ease: 'easeInOut' }}
         className="overflow-hidden"
       >
-        <div className="px-6 pb-5 text-sm text-[var(--color-text)] leading-relaxed whitespace-pre-line">
+        <div className="px-6 pb-5 text-base text-[var(--color-text)] leading-relaxed whitespace-pre-line">
           {children}
         </div>
       </motion.div>
@@ -91,7 +91,7 @@ function formatLLMText(text: string) {
     const headerMatch = line.match(/^\*\*(.+?)\*\*$/)
     if (headerMatch) {
       return (
-        <h4 key={i} className="font-semibold text-[var(--color-text)] mt-4 mb-1 text-sm uppercase tracking-wider">
+        <h4 key={i} className="font-semibold text-[var(--color-text)] mt-4 mb-1 text-base uppercase tracking-wider">
           {headerMatch[1]}
         </h4>
       )
@@ -146,7 +146,12 @@ export function NutritionCard({
 }: NutritionCardProps) {
   const nutritionEntries = nutrition
     ? Object.entries(nutrition).filter(
-        ([key]) => key.toLowerCase() !== 'recipe_name' && key.toLowerCase() !== 'name',
+        ([key, value]) =>
+          key.toLowerCase() !== 'recipe_name' &&
+          key.toLowerCase() !== 'name' &&
+          value !== null &&
+          value !== undefined &&
+          value !== '',
       )
     : []
 
@@ -163,12 +168,12 @@ export function NutritionCard({
       {/* Header */}
       <div className="px-6 pt-6 pb-4">
         {dishName && (
-          <h2 className="font-serif text-2xl font-bold text-[var(--color-text)] tracking-tight">
+          <h2 className="font-serif text-3xl font-bold text-[var(--color-text)] tracking-tight">
             {dishName}
           </h2>
         )}
         {constraint && (
-          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+          <p className="mt-1.5 text-base text-[var(--color-text-muted)]">
             Modified · <span className="italic">{constraint}</span>
           </p>
         )}
@@ -186,7 +191,7 @@ export function NutritionCard({
       </div>
 
       {/* Nutrition table */}
-      {nutritionEntries.length > 0 && (
+      {nutritionEntries.length > 0 ? (
         <div className="border-t border-[var(--color-border)]">
           {nutritionEntries.map(([key, value], i) => (
             <div
@@ -198,13 +203,21 @@ export function NutritionCard({
                   : 'bg-[var(--color-bg)]',
               )}
             >
-              <span className="text-sm text-[var(--color-text-muted)]">{key}</span>
-              <span className="text-sm font-medium text-[var(--color-text)] tabular-nums">
-                {String(value)}
+              <span className="text-base text-[var(--color-text-muted)]">{key}</span>
+              <span className="text-base font-medium text-[var(--color-text)] tabular-nums">
+                {value !== null && value !== undefined ? String(value) : '—'}
               </span>
             </div>
           ))}
         </div>
+      ) : (
+        !ingredients && !instructions && !llmResponse && (
+          <div className="border-t border-[var(--color-border)] px-6 py-5">
+            <p className="text-sm text-[var(--color-text-muted)]">
+              No nutritional data available for this item.
+            </p>
+          </div>
+        )
       )}
 
       {/* Ingredients */}
@@ -224,7 +237,7 @@ export function NutritionCard({
       {/* LLM Analysis */}
       {llmResponse && (
         <CollapsibleSection title="Analysis">
-          <div className="text-sm leading-relaxed text-[var(--color-text)]">
+          <div className="text-base leading-relaxed text-[var(--color-text)]">
             {formatLLMText(llmResponse)}
           </div>
         </CollapsibleSection>

@@ -223,15 +223,21 @@ class GraphRAGService:
 
     def _fts_recipe_search(self, query: str, limit: int) -> List[Dict]:
         rows = self._client.search_recipes_by_name(query, limit=limit)
-        # Normalise field name: FTS returns `search_score`, rename to vector_score
         for r in rows:
-            r["vector_score"] = r.pop("search_score", 0.0) / 10.0  # neo4j FTS scores vary
+            # search_recipes_by_name returns 'recipe_original' for the name field;
+            # rename to 'name' so it matches the SearchResult schema.
+            if "recipe_original" in r and "name" not in r:
+                r["name"] = r.pop("recipe_original")
+            elif "recipe_original" in r:
+                r.pop("recipe_original")
+            # Normalise score: Neo4j FTS scores are unbounded, cap at 1.0
+            r["vector_score"] = min(r.pop("search_score", 0.0) / 10.0, 1.0)
         return rows
 
     def _fts_product_search(self, query: str, limit: int) -> List[Dict]:
         rows = self._client.search_products_by_name(query, limit=limit)
         for r in rows:
-            r["vector_score"] = r.pop("search_score", 0.0) / 10.0
+            r["vector_score"] = min(r.pop("search_score", 0.0) / 10.0, 1.0)
         return rows
 
     # ── Graph filtering ────────────────────────────────────────────────────
@@ -341,7 +347,9 @@ class GraphRAGService:
             with self._client.driver.session() as session:
                 r = session.run(
                     """
-                    SHOW INDEXES WHERE type = 'VECTOR'
+                    SHOW INDEXES
+                    YIELD name, type
+                    WHERE type = 'VECTOR'
                     AND name IN ['recipe_embedding', 'product_embedding']
                     RETURN count(*) AS n
                     """

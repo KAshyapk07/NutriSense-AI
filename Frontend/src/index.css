@@ -27,6 +27,12 @@
     @apply bg-[var(--color-bg)] text-[var(--color-text)] font-sans antialiased transition-colors duration-300;
     margin: 0;
     padding: 0;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  html {
+    font-size: 16px;
   }
 
   * {

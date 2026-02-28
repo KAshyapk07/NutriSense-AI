@@ -21,6 +21,14 @@ class SearchResult(BaseModel):
     carbohydrates:  Optional[float] = None
     fats:           Optional[float] = None
     fibre:          Optional[float] = None
+    free_sugar:     Optional[float] = None
+    sodium:         Optional[float] = None
+    calcium:        Optional[float] = None
+    iron:           Optional[float] = None
+    vitamin_c:      Optional[float] = None
+    folate:         Optional[float] = None
+    raw_ingredients: Optional[str] = None
+    instructions:   Optional[str] = None
     # Optional extras — present for FoodProduct results
     brand:              Optional[str] = None
     category:           Optional[str] = None
@@ -31,6 +39,8 @@ class SearchResult(BaseModel):
     carbohydrates_100g: Optional[float] = None
     fat_100g:           Optional[float] = None
     fiber_100g:         Optional[float] = None
+    sodium_100g:        Optional[float] = None
+    sugars_100g:        Optional[float] = None
     image_url:          Optional[str] = None
     # Catch-all for any other fields returned by the DB
     extra: Optional[Dict[str, Any]] = Field(None, exclude=True)
