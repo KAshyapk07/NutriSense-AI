@@ -53,14 +53,21 @@ MODIFY_KEYWORDS = [
     'oil free', 'dairy free',
 ]
 
+SEARCH_KEYWORDS = [
+    'suggest', 'recommend', 'ideas for', 'recipes with', 'what can i make',
+    'show me some', 'find', 'search for', 'options for', 'list of',
+    'dishes with', 'give me some'
+]
+
 COMPARE_REGEX = re.compile('|'.join(COMPARE_PATTERNS), re.IGNORECASE)
 
 
 class NutriSenseRouter:
-    def __init__(self, neo4j_client, llm_engine, image_model=None):
+    def __init__(self, neo4j_client, llm_engine, image_model=None, graph_rag_service=None):
         self.neo4j_client = neo4j_client
         self.engine = llm_engine
         self.image_model = image_model
+        self.graph_rag_service = graph_rag_service
 
     # ─────────────────────────────────────────────────────────────────────
     # Cluster detection helpers
@@ -113,6 +120,10 @@ class NutriSenseRouter:
                     "dishes": [dish] if dish else [q],
                     "constraint": constraint,
                 }
+
+        for kw in SEARCH_KEYWORDS:
+            if kw in q:
+                return {"pathway": "SEARCH", "dishes": [q], "constraint": None}
 
         dish = self._clean_dish_name(q)
         return {"pathway": "EXTRACT", "dishes": [dish if dish else q], "constraint": None}
@@ -175,11 +186,13 @@ Categories:
 - "EXTRACT": User is asking about ONE specific food/dish (this is the DEFAULT)
 - "COMPARE": User EXPLICITLY asks to compare TWO or more foods (must use words like "vs", "compare", "versus", "or which is better")
 - "MODIFY": User wants to change/modify a recipe (must use words like "less", "low", "without", "vegan", "healthier version")
+- "SEARCH": User is looking for recommendations, multiple dishes, or asking for recipes containing specific generic ingredients (e.g. "suggest", "ideas for", "recipes with chicken")
 
 CRITICAL RULES:
-1. If the query mentions only ONE dish, ALWAYS return EXTRACT — never invent a second dish
+1. If the query mentions only ONE exact dish for info, ALWAYS return EXTRACT — never invent a second dish
 2. COMPARE requires the user to EXPLICITLY name two dishes
-3. When in doubt, choose EXTRACT
+3. If the query asks for ideas, suggestions, or mentions ingredients rather than a specific dish, return SEARCH
+4. When in doubt, choose EXTRACT
 4. The "dishes" array must contain ONLY dishes that the user actually mentioned
 
 Return ONLY valid JSON (no markdown, no explanation):
@@ -244,6 +257,8 @@ Return ONLY valid JSON (no markdown, no explanation):
             elif pathway == "MODIFY":
                 target_dish = dishes[0] if dishes else text_query
                 return self.handle_modification(target_dish, constraint)
+            elif pathway == "SEARCH":
+                return self.handle_search(text_query)
             else:
                 target = dishes[0] if dishes else text_query
                 return self.handle_extraction(target)
@@ -398,6 +413,27 @@ Return ONLY valid JSON (no markdown, no explanation):
             goal_text = f" for {goal}" if goal else ""
             return self.engine.estimate_nutrition(f"Compare {dishes[0]} and {dishes[1]}{goal_text}")
 
+    def handle_search(self, query):
+        if not self.graph_rag_service:
+            return {"error": "Search service is not initialized"}
+        
+        try:
+            results = self.graph_rag_service.search(
+                query=query,
+                cluster="all",
+                limit=10,
+            )
+            return {
+                "pathway": "search",
+                "query": query,
+                "results": results,
+                "total": len(results),
+                "llm_response": f"I found {len(results)} suggestions for '{query}'.",
+            }
+        except Exception as e:
+            traceback.print_exc()
+            return {"error": str(e), "llm_response": f"An error occurred during search: {e}"}
+
     # Async execute methods.
     # Neo4j queries and TF inference run in a thread pool via asyncio.to_thread.
     # LLM calls use generate_async (httpx) and do not block the event loop.
@@ -429,6 +465,8 @@ Return ONLY valid JSON (no markdown, no explanation):
             elif pathway == "MODIFY":
                 target = dishes[0] if dishes else text_query
                 return await self._async_handle_modification(target, constraint)
+            elif pathway == "SEARCH":
+                return await self._async_handle_search(text_query)
             else:
                 target = dishes[0] if dishes else text_query
                 return await self._async_handle_extraction(target)
@@ -580,3 +618,24 @@ Return ONLY valid JSON (no markdown, no explanation):
             return await self.engine.estimate_nutrition_async(
                 f"Compare {dishes[0]} and {dishes[1]}{goal_text}"
             )
+
+    async def _async_handle_search(self, query: str) -> dict:
+        if not self.graph_rag_service:
+            return {"error": "Search service is not initialized"}
+        
+        try:
+            results = await self.graph_rag_service.search_async(
+                query=query,
+                cluster="all",
+                limit=10,
+            )
+            return {
+                "pathway": "search",
+                "query": query,
+                "results": results,
+                "total": len(results),
+                "llm_response": f"I found {len(results)} suggestions for '{query}'.",
+            }
+        except Exception as exc:
+            traceback.print_exc()
+            return {"error": str(exc), "llm_response": f"An error occurred during search: {exc}"}

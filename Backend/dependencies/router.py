@@ -8,6 +8,7 @@ from Src.LLM.llm_engine import LLMEngine
 from Src.Router.Router import NutriSenseRouter
 from Backend.dependencies.neo4j import get_neo4j_client
 from Backend.dependencies.model import get_image_model
+from Backend.dependencies.graph_rag import get_graph_rag_service
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ def init() -> None:
     global _router
     neo4j_client = get_neo4j_client()
     image_model = get_image_model()
+    graph_rag_service = get_graph_rag_service()
 
     llm_client = OllamaLLMClient()
     llm_engine = LLMEngine(llm_client)
@@ -25,6 +27,7 @@ def init() -> None:
         neo4j_client=neo4j_client,
         llm_engine=llm_engine,
         image_model=image_model,
+        graph_rag_service=graph_rag_service,
     )
     logger.info("NutriSenseRouter initialized.")
 

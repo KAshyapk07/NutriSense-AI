@@ -53,10 +53,19 @@ export interface ErrorResponse {
   detail?: string | null
 }
 
+export interface RouterSearchResponse {
+  pathway: 'search'
+  query: string
+  results: SearchResult[]
+  total: number
+  llm_response?: string | null
+}
+
 export type ProcessResponse =
   | ExtractionResponse
   | ComparisonResponse
   | ModificationResponse
+  | RouterSearchResponse
   | ErrorResponse
 
 /* ── Type guards ── */
@@ -71,6 +80,10 @@ export function isComparison(r: ProcessResponse): r is ComparisonResponse {
 
 export function isModification(r: ProcessResponse): r is ModificationResponse {
   return 'pathway' in r && r.pathway === 'modification'
+}
+
+export function isSearch(r: ProcessResponse): r is RouterSearchResponse {
+  return 'pathway' in r && r.pathway === 'search'
 }
 
 export function isError(r: ProcessResponse): r is ErrorResponse {

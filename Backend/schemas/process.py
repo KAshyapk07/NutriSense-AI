@@ -47,6 +47,14 @@ class ModificationResponse(BaseModel):
     estimated: Optional[bool] = None
 
 
+class RouterSearchResponse(BaseModel):
+    pathway: str = "search"
+    query: str
+    results: List[Dict[str, Any]]
+    total: int
+    llm_response: Optional[str] = None
+
+
 class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None
@@ -56,5 +64,6 @@ ProcessResponse = Union[
     ExtractionResponse,
     ComparisonResponse,
     ModificationResponse,
+    RouterSearchResponse,
     ErrorResponse,
 ]
