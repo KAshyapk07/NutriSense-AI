@@ -4,7 +4,7 @@
  * Route: /search?q=<query>
  * Features:
  * - Table-style nutrition cards grouped by Recipes and Products
- * - 3 recipes + 3 products max per search
+ * - 3 results shown initially per cluster; "See more" expands to ~15
  * - Filter panel (cluster toggle + allergen pills)
  * - "Ask AI" navigates to a dedicated chat page
  */
@@ -12,15 +12,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  AlertCircle,
-  Network,
-  Search,
   SlidersHorizontal,
-  Zap,
-  SearchX,
   RotateCcw,
-  UtensilsCrossed,
-  Package,
 } from 'lucide-react'
 import { Header } from '@/components/layout/header'
 import { FilterPanel } from '@/components/ui/filter-panel'
@@ -31,7 +24,8 @@ import { usePreferences } from '@/hooks/use-preferences'
 import { cn } from '@/lib/utils'
 import type { SearchFilters, SearchResult } from '@/lib/types'
 
-const MAX_PER_CLUSTER = 3
+const INITIAL_PER_CLUSTER = 3
+const EXPANDED_PER_CLUSTER = 15
 
 /* -- Empty state -------------------------------------------------- */
 function EmptyState({ query }: { query: string }) {
@@ -41,7 +35,6 @@ function EmptyState({ query }: { query: string }) {
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col items-center justify-center py-24 text-center"
     >
-      <SearchX size={48} className="text-[var(--color-text-muted)] mb-5 opacity-40" />
       <p className="text-base font-medium text-[var(--color-text)] mb-2">
         No results found for &ldquo;{query}&rdquo;
       </p>
@@ -54,17 +47,14 @@ function EmptyState({ query }: { query: string }) {
 
 /* -- Section heading ---------------------------------------------- */
 function SectionHeading({
-  icon: Icon,
   label,
   count,
 }: {
-  icon: React.FC<{ size?: number; className?: string }>
   label: string
   count: number
 }) {
   return (
     <div className="flex items-center gap-3 mb-5 mt-10 first:mt-0">
-      <Icon size={22} className="text-[var(--color-accent)]" />
       <h2 className="text-lg font-bold text-[var(--color-text)]">{label}</h2>
       <span className="text-sm text-[var(--color-text-muted)]">({count})</span>
     </div>
@@ -86,9 +76,11 @@ export default function SearchPage() {
     cluster: 'all',
     healthTags: prefs.activeDiets,
     excludeAllergens: prefs.excludeAllergens,
-    limit: 10,
+    limit: 50,
   }))
   const [showFilters, setShowFilters] = useState(false)
+  const [showAllRecipes, setShowAllRecipes] = useState(false)
+  const [showAllProducts, setShowAllProducts] = useState(false)
 
   /* -- Run search whenever query or filters change -- */
   const runSearch = useCallback(
@@ -111,6 +103,8 @@ export default function SearchPage() {
 
   const handleNewSearch = (query: string) => {
     reset()
+    setShowAllRecipes(false)
+    setShowAllProducts(false)
     setSearchParams({ q: query })
   }
 
@@ -128,7 +122,6 @@ export default function SearchPage() {
       <div className="min-h-screen bg-[var(--color-bg)]">
         <Header />
         <div className="flex flex-col items-center justify-center py-32 px-4 text-center">
-          <Search size={48} className="text-[var(--color-text-muted)] mb-5 opacity-40" />
           <p className="text-lg font-medium text-[var(--color-text)] mb-2">Search for food</p>
           <p className="text-sm text-[var(--color-text-muted)] max-w-md leading-relaxed">
             Use the search bar above to find recipes and products across our database
@@ -140,8 +133,14 @@ export default function SearchPage() {
   }
 
   const results = response?.results ?? []
-  const recipeResults = results.filter((r) => r.cluster === 'recipe').slice(0, MAX_PER_CLUSTER)
-  const productResults = results.filter((r) => r.cluster === 'product').slice(0, MAX_PER_CLUSTER)
+  const allRecipeResults = results.filter((r) => r.cluster === 'recipe')
+  const allProductResults = results.filter((r) => r.cluster === 'product')
+  const recipeResults = showAllRecipes
+    ? allRecipeResults.slice(0, EXPANDED_PER_CLUSTER)
+    : allRecipeResults.slice(0, INITIAL_PER_CLUSTER)
+  const productResults = showAllProducts
+    ? allProductResults.slice(0, EXPANDED_PER_CLUSTER)
+    : allProductResults.slice(0, INITIAL_PER_CLUSTER)
   const displayedTotal = recipeResults.length + productResults.length
 
   return (
@@ -166,13 +165,11 @@ export default function SearchPage() {
                 </span>
                 {response.vector_search_used && (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-500">
-                    <Zap size={11} />
                     GraphRAG
                   </span>
                 )}
                 {!response.vector_search_used && (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-text-muted)]">
-                    <Network size={11} />
                     Full-text
                   </span>
                 )}
@@ -226,7 +223,6 @@ export default function SearchPage() {
             animate={{ opacity: 1, y: 0 }}
             className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center"
           >
-            <AlertCircle size={40} className="mx-auto text-[var(--color-text-muted)] mb-4 opacity-40" />
             <p className="text-base font-medium text-[var(--color-text)] mb-2">Search failed</p>
             <p className="text-sm text-[var(--color-text-muted)] mb-6 max-w-sm mx-auto">{error}</p>
             <button
@@ -250,7 +246,7 @@ export default function SearchPage() {
             {/* Recipes */}
             {recipeResults.length > 0 && (
               <div>
-                <SectionHeading icon={UtensilsCrossed} label="Recipes" count={recipeResults.length} />
+                <SectionHeading label="Recipes" count={allRecipeResults.length} />
                 <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
                   {recipeResults.map((result, i) => (
                     <SearchResultCard
@@ -261,14 +257,34 @@ export default function SearchPage() {
                     />
                   ))}
                 </div>
+                {!showAllRecipes && allRecipeResults.length > INITIAL_PER_CLUSTER && (
+                  <div className="flex justify-center mt-6">
+                    <button
+                      onClick={() => setShowAllRecipes(true)}
+                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-2.5 text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/50 transition-colors"
+                    >
+                      See more recipes ({allRecipeResults.length - INITIAL_PER_CLUSTER} more)
+                    </button>
+                  </div>
+                )}
+                {showAllRecipes && allRecipeResults.length > INITIAL_PER_CLUSTER && (
+                  <div className="flex justify-center mt-6">
+                    <button
+                      onClick={() => setShowAllRecipes(false)}
+                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-2.5 text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/50 transition-colors"
+                    >
+                      Show fewer recipes
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
             {/* Products */}
             {productResults.length > 0 && (
               <div>
-                <SectionHeading icon={Package} label="Products" count={productResults.length} />
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <SectionHeading label="Products" count={allProductResults.length} />
+                <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
                   {productResults.map((result, i) => (
                     <SearchResultCard
                       key={result.id}
@@ -278,6 +294,26 @@ export default function SearchPage() {
                     />
                   ))}
                 </div>
+                {!showAllProducts && allProductResults.length > INITIAL_PER_CLUSTER && (
+                  <div className="flex justify-center mt-6">
+                    <button
+                      onClick={() => setShowAllProducts(true)}
+                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-2.5 text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/50 transition-colors"
+                    >
+                      See more products ({allProductResults.length - INITIAL_PER_CLUSTER} more)
+                    </button>
+                  </div>
+                )}
+                {showAllProducts && allProductResults.length > INITIAL_PER_CLUSTER && (
+                  <div className="flex justify-center mt-6">
+                    <button
+                      onClick={() => setShowAllProducts(false)}
+                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-2.5 text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/50 transition-colors"
+                    >
+                      Show fewer products
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>

@@ -119,7 +119,19 @@ export default function Settings() {
   const navigate = useNavigate()
   const { theme, toggle } = useTheme()
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [notifications, setNotifications] = useState(false)
+  const [notifications, setNotifications] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('nutrisense-notifications') === 'true'
+  })
+
+  // Persist notification preference
+  const toggleNotifications = () => {
+    setNotifications((v) => {
+      const next = !v
+      localStorage.setItem('nutrisense-notifications', String(next))
+      return next
+    })
+  }
 
   // Persistent preferences
   const { prefs, setActiveDiets, setExcludeAllergens, clearAll } = usePreferences()
@@ -167,7 +179,7 @@ export default function Settings() {
                     aria-label="Toggle theme"
                   >
                     <span className={cn(
-                      'absolute top-0.5 h-5 w-5 rounded-full transition-transform duration-200',
+                      'absolute top-0.5 left-0.5 h-5 w-5 rounded-full transition-transform duration-200',
                       'bg-[var(--color-accent-contrast)] shadow-sm',
                       theme === 'dark' ? 'translate-x-5' : 'translate-x-0',
                     )} />
@@ -270,10 +282,10 @@ export default function Settings() {
               icon={Bell}
               label="Weekly Nutrition Digest"
               description="A summary of your most searched dishes and insights"
-              onClick={() => setNotifications((v) => !v)}
+              onClick={toggleNotifications}
               right={
                 <button
-                  onClick={(e) => { e.stopPropagation(); setNotifications((v) => !v) }}
+                  onClick={(e) => { e.stopPropagation(); toggleNotifications() }}
                   className={cn(
                     'relative h-6 w-11 rounded-full border transition-colors duration-200',
                     notifications
@@ -283,7 +295,7 @@ export default function Settings() {
                   aria-label="Toggle notifications"
                 >
                   <span className={cn(
-                    'absolute top-0.5 h-5 w-5 rounded-full transition-transform duration-200',
+                    'absolute top-0.5 left-0.5 h-5 w-5 rounded-full transition-transform duration-200',
                     'bg-[var(--color-accent-contrast)] shadow-sm',
                     notifications ? 'translate-x-5' : 'translate-x-0',
                   )} />

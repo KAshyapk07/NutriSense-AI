@@ -56,8 +56,20 @@ MODIFY_KEYWORDS = [
 SEARCH_KEYWORDS = [
     'suggest', 'recommend', 'ideas for', 'recipes with', 'what can i make',
     'show me some', 'find', 'search for', 'options for', 'list of',
-    'dishes with', 'give me some'
+    'dishes with', 'give me some',
 ]
+
+# Semantic search patterns — queries that describe a category or dietary goal
+# rather than a specific named dish. These should route to the GraphRAG search.
+SEARCH_QUALIFIER_PATTERNS = [
+    r'\b(high|low|rich)\s+(protein|calorie|carb|fat|fibre|fiber|sodium|sugar)\b',
+    r'\b(keto|paleo|diabetic|vegan|vegetarian|gluten\s*free)\s+(friendly|safe)?\s*(breakfast|lunch|dinner|snack|meal|dish|recipe|food|dessert|sweet|drink|option)s?\b',
+    r'\b(breakfast|lunch|dinner|snack|dessert|sweet|appetizer|starter|side\s*dish)\s+(idea|option|recipe|suggestion|recommendation)s?\b',
+    r'\b(healthy|light|quick|easy|simple|protein.?rich|fibre.?rich|iron.?rich)\s+(breakfast|lunch|dinner|snack|meal|dish|recipe|food|dessert|option)s?\b',
+    r'\b(diabetic\s+friendly|heart\s+healthy)\b',
+]
+
+SEARCH_QUALIFIER_REGEX = re.compile('|'.join(SEARCH_QUALIFIER_PATTERNS), re.IGNORECASE)
 
 COMPARE_REGEX = re.compile('|'.join(COMPARE_PATTERNS), re.IGNORECASE)
 
@@ -125,6 +137,10 @@ class NutriSenseRouter:
             if kw in q:
                 return {"pathway": "SEARCH", "dishes": [q], "constraint": None}
 
+        # Semantic search patterns — e.g. "high protein breakfast", "keto snacks"
+        if SEARCH_QUALIFIER_REGEX.search(q):
+            return {"pathway": "SEARCH", "dishes": [q], "constraint": None}
+
         dish = self._clean_dish_name(q)
         return {"pathway": "EXTRACT", "dishes": [dish if dish else q], "constraint": None}
 
@@ -186,14 +202,14 @@ Categories:
 - "EXTRACT": User is asking about ONE specific food/dish (this is the DEFAULT)
 - "COMPARE": User EXPLICITLY asks to compare TWO or more foods (must use words like "vs", "compare", "versus", "or which is better")
 - "MODIFY": User wants to change/modify a recipe (must use words like "less", "low", "without", "vegan", "healthier version")
-- "SEARCH": User is looking for recommendations, multiple dishes, or asking for recipes containing specific generic ingredients (e.g. "suggest", "ideas for", "recipes with chicken")
+- "SEARCH": User is looking for recommendations, multiple dishes, dietary-category queries (e.g. "high protein breakfast", "keto snacks", "diabetic friendly desserts"), or asking for recipes containing specific generic ingredients (e.g. "suggest", "ideas for", "recipes with chicken")
 
 CRITICAL RULES:
 1. If the query mentions only ONE exact dish for info, ALWAYS return EXTRACT — never invent a second dish
 2. COMPARE requires the user to EXPLICITLY name two dishes
-3. If the query asks for ideas, suggestions, or mentions ingredients rather than a specific dish, return SEARCH
+3. If the query asks for ideas, suggestions, uses dietary qualifiers (high protein, low calorie, keto, vegan, diabetic friendly) combined with meal types (breakfast, snack, dessert), or mentions ingredients rather than a specific dish, return SEARCH
 4. When in doubt, choose EXTRACT
-4. The "dishes" array must contain ONLY dishes that the user actually mentioned
+5. The "dishes" array must contain ONLY dishes that the user actually mentioned
 
 Return ONLY valid JSON (no markdown, no explanation):
 {{"pathway": "EXTRACT", "dishes": ["dish name"], "constraint": null}}"""

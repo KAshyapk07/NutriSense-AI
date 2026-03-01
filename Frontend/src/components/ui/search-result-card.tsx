@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, ChevronDown } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { SearchResult } from '@/lib/types'
@@ -102,23 +102,6 @@ function buildNutritionRows(result: SearchResult): { label: string; value: strin
   return rows
 }
 
-/* ── NOVA group labels ──────────────────────────────────────────── */
-const NOVA_LABELS: Record<number, { label: string; color: string }> = {
-  1: { label: 'Unprocessed', color: 'text-green-500' },
-  2: { label: 'Processed ingredients', color: 'text-lime-500' },
-  3: { label: 'Processed', color: 'text-orange-400' },
-  4: { label: 'Ultra-processed', color: 'text-red-500' },
-}
-
-/* ── Nutri-score colour map ─────────────────────────────────────── */
-const NUTRISCORE_COLORS: Record<string, string> = {
-  a: 'bg-green-500',
-  b: 'bg-lime-500',
-  c: 'bg-yellow-400',
-  d: 'bg-orange-500',
-  e: 'bg-red-500',
-}
-
 /* ── Main component ──────────────────────────────────────────────── */
 interface SearchResultCardProps {
   result: SearchResult
@@ -172,23 +155,9 @@ export function SearchResultCard({
           )}
         </div>
 
-        {/* Badges — confidence / accuracy / nutri-score */}
+        {/* Badges — confidence */}
         <div className="flex flex-wrap items-center gap-2 mt-3">
           <Badge>{scorePct}% Match</Badge>
-          {!isRecipe && result.nutriscore_grade && (
-            <span
-              className={cn(
-                'inline-flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold uppercase text-white',
-                NUTRISCORE_COLORS[result.nutriscore_grade.toLowerCase()] ?? 'bg-gray-400',
-              )}
-              title={`Nutri-Score ${result.nutriscore_grade.toUpperCase()}`}
-            >
-              {result.nutriscore_grade.toUpperCase()}
-            </span>
-          )}
-          <Badge variant="outline">
-            {isRecipe ? 'Recipe' : 'Product'}
-          </Badge>
         </div>
       </div>
 
@@ -212,15 +181,6 @@ export function SearchResultCard({
         </div>
       )}
 
-      {/* ── NOVA group (products only) ── */}
-      {!isRecipe && result.nova_group != null && NOVA_LABELS[result.nova_group] && (
-        <div className="border-t border-[var(--color-border)] px-6 py-3">
-          <span className={cn('text-xs font-medium', NOVA_LABELS[result.nova_group].color)}>
-            NOVA {result.nova_group} — {NOVA_LABELS[result.nova_group].label}
-          </span>
-        </div>
-      )}
-
       {/* ── Ingredients (recipes only) ── */}
       {isRecipe && result.raw_ingredients && (
         <CollapsibleSection title="Ingredients" defaultOpen>
@@ -241,7 +201,6 @@ export function SearchResultCard({
           onClick={(e) => { e.stopPropagation(); onChat?.(result) }}
           className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-muted)] px-4 py-2 hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/50 transition-colors"
         >
-          <MessageSquare size={14} />
           Ask AI about this
         </button>
       </div>

@@ -30,15 +30,19 @@ import {
 import { Header } from '@/components/layout/header'
 import { NutritionCard } from '@/components/ui/nutrition-card'
 import { ComparisonView } from '@/components/ui/comparison-view'
+import { SearchResultCard } from '@/components/ui/search-result-card'
 import { SkeletonLoader } from '@/components/ui/skeleton-loader'
 import { processQuery } from '@/lib/api'
 import {
   isComparison,
   isExtraction,
   isModification,
+  isSearch,
   isError,
   type ProcessResponse,
   type ExtractionResponse,
+  type RouterSearchResponse,
+  type SearchResult,
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -117,6 +121,57 @@ function VariantCard({
         )}
       </AnimatePresence>
     </motion.div>
+  )
+}
+
+/* ── Inline search results — rendered when Router returns pathway=search ── */
+
+function SearchResultsInline({ data }: { data: RouterSearchResponse }) {
+  const navigate = useNavigate()
+  const recipeResults = data.results.filter((r) => r.cluster === 'recipe').slice(0, 3)
+  const productResults = data.results.filter((r) => r.cluster === 'product').slice(0, 3)
+
+  const handleOpenChat = (result: SearchResult) => {
+    navigate('/product-chat', { state: { result } })
+  }
+
+  return (
+    <div className="flex flex-col gap-6 w-full">
+      {data.llm_response && (
+        <p className="text-sm text-[var(--color-text-muted)] leading-relaxed px-1">
+          {data.llm_response}
+        </p>
+      )}
+      {recipeResults.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2.5 mb-4">
+            <h3 className="text-base font-bold text-[var(--color-text)]">Recipes ({recipeResults.length})</h3>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {recipeResults.map((r, i) => (
+              <SearchResultCard key={r.id} result={r} index={i} onChat={handleOpenChat} />
+            ))}
+          </div>
+        </div>
+      )}
+      {productResults.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2.5 mb-4">
+            <h3 className="text-base font-bold text-[var(--color-text)]">Products ({productResults.length})</h3>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {productResults.map((r, i) => (
+              <SearchResultCard key={r.id} result={r} index={i} onChat={handleOpenChat} />
+            ))}
+          </div>
+        </div>
+      )}
+      {recipeResults.length === 0 && productResults.length === 0 && (
+        <p className="text-sm text-[var(--color-text-muted)] text-center py-8">
+          No results found for this query.
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -231,6 +286,11 @@ function AiBubble({
           estimated={result.estimated}
           constraint={result.constraint}
         />
+      )}
+
+      {/* Search results — rendered inline as cards */}
+      {isSearch(result) && (
+        <SearchResultsInline data={result} />
       )}
     </motion.div>
   )

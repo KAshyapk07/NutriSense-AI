@@ -42,7 +42,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,35 @@ GRAPH_WEIGHT  = 0.3
 
 # Number of candidates fetched from each cluster before re-ranking
 CANDIDATE_MULTIPLIER = 5   # fetch limit*5 candidates, re-rank, return top limit
+
+# ── Health-tag keyword mapping ─────────────────────────────────────
+# Maps user-query keywords to HealthTag node names in Neo4j.
+# When a query contains any of these patterns, the corresponding tag
+# is auto-applied as a SUITABLE_FOR filter so the graph does the heavy
+# lifting instead of relying solely on vector/text similarity.
+_HEALTH_TAG_KEYWORDS: List[Tuple[re.Pattern, str]] = [
+    (re.compile(r"\bhigh\s*protein\b", re.I), "High Protein"),
+    (re.compile(r"\bprotein[- ]?rich\b", re.I), "High Protein"),
+    (re.compile(r"\blow\s*cal(?:orie)?\b", re.I), "Low Calorie"),
+    (re.compile(r"\blight\b", re.I), "Low Calorie"),
+    (re.compile(r"\bketo\b", re.I), "Keto"),
+    (re.compile(r"\bketogenic\b", re.I), "Keto"),
+    (re.compile(r"\bdiabetic\b", re.I), "Diabetic Friendly"),
+    (re.compile(r"\bsugar[- ]?free\b", re.I), "Diabetic Friendly"),
+    (re.compile(r"\bvegan\b", re.I), "Vegan"),
+    (re.compile(r"\bplant[- ]?based\b", re.I), "Vegan"),
+    (re.compile(r"\bgluten[- ]?free\b", re.I), "Gluten Free"),
+    (re.compile(r"\bpaleo\b", re.I), "Paleo"),
+]
+
+
+def _extract_health_tags(query: str) -> List[str]:
+    """Return deduplicated list of HealthTag names detected in *query*."""
+    tags: List[str] = []
+    for pattern, tag in _HEALTH_TAG_KEYWORDS:
+        if pattern.search(query) and tag not in tags:
+            tags.append(tag)
+    return tags
 
 
 class GraphRAGService:
@@ -96,6 +126,18 @@ class GraphRAGService:
         if cluster not in {"all", "recipe", "product"}:
             cluster = "all"
 
+        # Auto-detect health tags from the natural-language query and merge
+        # them with any explicitly provided tags so that queries like
+        # "high protein breakfast" leverage SUITABLE_FOR graph edges.
+        detected_tags = _extract_health_tags(query)
+        if detected_tags:
+            merged: List[str] = list(health_tags) if health_tags else []
+            for t in detected_tags:
+                if t not in merged:
+                    merged.append(t)
+            health_tags = merged
+            logger.info("[GraphRAG] Auto-detected health tags from query: %s", detected_tags)
+
         candidates_limit = limit * CANDIDATE_MULTIPLIER
 
         use_vector = self._check_vector_ready()
@@ -129,6 +171,14 @@ class GraphRAGService:
 
         # Re-rank
         combined = self._rerank(combined, health_tags)
+
+        # ── Balanced cluster return ────────────────────────────────────
+        # When searching "all", products often dominate because their
+        # names literally contain keywords (e.g. "High Protein Oats")
+        # yielding higher vector scores.  We guarantee each cluster a
+        # fair share of the limit so users always see both food types.
+        if cluster == "all":
+            return self._balanced_return(combined, limit)
 
         return combined[:limit]
 
@@ -272,27 +322,62 @@ class GraphRAGService:
     def _apply_health_tag_filter(
         self, records: List[Dict], health_tags: Optional[List[str]]
     ) -> List[Dict]:
-        """Keep only records that match ALL of the requested health tags."""
+        """Keep only records that match ALL of the requested health tags.
+
+        Uses batched Cypher queries (one per cluster) instead of per-node
+        lookups for dramatically better performance.
+        """
         if not health_tags:
             return records
 
+        num_required = len(health_tags)
+
+        # Split by cluster for label-specific queries
+        recipe_records  = [r for r in records if r.get("cluster") == "recipe"]
+        product_records = [r for r in records if r.get("cluster") == "product"]
+
+        # Build {id → record} mappings and collect ids for batch query
+        recipe_by_id  = {r["id"]: r for r in recipe_records}
+        product_by_id = {r["id"]: r for r in product_records}
+
         keep = []
         with self._client.driver.session() as session:
-            for r in records:
-                label = "Recipe" if r.get("cluster") == "recipe" else "FoodProduct"
-                result = session.run(
-                    f"""
-                    MATCH (n:{label} {{id: $id}})
-                    -[:SUITABLE_FOR]->(ht:HealthTag)
+            # Batch: recipes
+            if recipe_by_id:
+                rows = session.run(
+                    """
+                    UNWIND $ids AS nid
+                    OPTIONAL MATCH (n:Recipe {id: nid})-[:SUITABLE_FOR]->(ht:HealthTag)
                     WHERE ht.name IN $tags
-                    RETURN count(DISTINCT ht.name) AS matched
+                    RETURN nid AS id, count(DISTINCT ht.name) AS matched
                     """,
-                    id=r["id"], tags=health_tags,
-                ).single()
-                matched = result["matched"] if result else 0
-                r["_tag_matched"] = matched
-                if matched == len(health_tags):
-                    keep.append(r)
+                    ids=list(recipe_by_id.keys()), tags=health_tags,
+                ).data()
+                for row in rows:
+                    rec = recipe_by_id.get(row["id"])
+                    if rec:
+                        rec["_tag_matched"] = row["matched"]
+                        if row["matched"] >= num_required:
+                            keep.append(rec)
+
+            # Batch: products
+            if product_by_id:
+                rows = session.run(
+                    """
+                    UNWIND $ids AS nid
+                    OPTIONAL MATCH (n:FoodProduct {id: nid})-[:SUITABLE_FOR]->(ht:HealthTag)
+                    WHERE ht.name IN $tags
+                    RETURN nid AS id, count(DISTINCT ht.name) AS matched
+                    """,
+                    ids=list(product_by_id.keys()), tags=health_tags,
+                ).data()
+                for row in rows:
+                    rec = product_by_id.get(row["id"])
+                    if rec:
+                        rec["_tag_matched"] = row["matched"]
+                        if row["matched"] >= num_required:
+                            keep.append(rec)
+
         return keep
 
     # ── Re-ranking ─────────────────────────────────────────────────────────
@@ -324,6 +409,45 @@ class GraphRAGService:
 
         records.sort(key=lambda x: x["final_score"], reverse=True)
         return records
+
+    # ── Balanced cluster return ────────────────────────────────────────────
+
+    @staticmethod
+    def _balanced_return(
+        ranked: List[Dict[str, Any]], limit: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Ensure both clusters get a fair share of the final result set.
+
+        Strategy:
+          - Reserve ``limit // 2`` slots for each cluster.
+          - If a cluster has fewer results than its quota, redirect the
+            unused slots to the other cluster.
+          - Final list is re-sorted by ``final_score`` so the frontend
+            can split by cluster and still see them in score order.
+        """
+        recipes  = [r for r in ranked if r.get("cluster") == "recipe"]
+        products = [r for r in ranked if r.get("cluster") == "product"]
+
+        half = limit // 2
+
+        if len(recipes) >= half and len(products) >= half:
+            picked = recipes[:half] + products[:half]
+        elif len(recipes) < half:
+            product_slots = limit - len(recipes)
+            picked = recipes + products[:product_slots]
+        else:
+            recipe_slots = limit - len(products)
+            picked = recipes[:recipe_slots] + products
+
+        picked.sort(key=lambda x: x.get("final_score", 0), reverse=True)
+        logger.info(
+            "[GraphRAG] Balanced return: %d recipes, %d products (limit=%d)",
+            sum(1 for r in picked if r.get("cluster") == "recipe"),
+            sum(1 for r in picked if r.get("cluster") == "product"),
+            limit,
+        )
+        return picked
 
     # ── Health-tag convenience ─────────────────────────────────────────────
 

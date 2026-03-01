@@ -7,14 +7,14 @@ import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 const SUGGESTIONS = [
-  "Sambar",
-  "Biryani",
-  "Compare Dosa vs Idli",
+  "High protein breakfast",
+  "Compare Biryani vs Pulao",
+  "Keto-friendly snacks",
   "Paneer Tikka",
-  "Vegan Butter Chicken",
-  "Chapati nutrition",
+  "Diabetic friendly desserts",
   "Low calorie Dal",
-  "Gulab Jamun",
+  "Sambar nutrition facts",
+  "Vegan Indian meals",
 ]
 
 interface SearchBarProps {
@@ -233,31 +233,43 @@ const SearchBar = ({
             <Camera size={compact ? 16 : 18} strokeWidth={1.5} />
           </button>
 
-          {/* Submit button */}
-          <AnimatePresence>
-            {(searchQuery || selectedImage) && (
-              <motion.button
-                type="submit"
-                initial={{ opacity: 0, scale: 0.8, width: 0 }}
-                animate={{ opacity: 1, scale: 1, width: 'auto' }}
-                exit={{ opacity: 0, scale: 0.8, width: 0 }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={cn(
-                  "flex items-center justify-center flex-shrink-0 rounded-full",
-                  glass
-                    ? "bg-white text-black"
-                    : "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]",
-                  "transition-shadow hover:shadow-lg",
-                  compact
-                    ? "h-8 w-8 mr-1.5"
-                    : "h-10 w-10 mr-2",
-                )}
-              >
-                <ArrowRight size={compact ? 14 : 18} strokeWidth={2} />
-              </motion.button>
-            )}
-          </AnimatePresence>
+          {/* Submit button — always visible in compact, conditional in full */}
+          {compact ? (
+            <button
+              type="submit"
+              className={cn(
+                "flex items-center justify-center flex-shrink-0 rounded-full",
+                "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]",
+                "transition-all hover:shadow-lg hover:opacity-90",
+                "h-9 w-9 mr-1.5",
+              )}
+            >
+              <Search size={16} strokeWidth={2} />
+            </button>
+          ) : (
+            <AnimatePresence>
+              {(searchQuery || selectedImage) && (
+                <motion.button
+                  type="submit"
+                  initial={{ opacity: 0, scale: 0.8, width: 0 }}
+                  animate={{ opacity: 1, scale: 1, width: 'auto' }}
+                  exit={{ opacity: 0, scale: 0.8, width: 0 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={cn(
+                    "flex items-center justify-center flex-shrink-0 rounded-full",
+                    glass
+                      ? "bg-white text-black"
+                      : "bg-[var(--color-accent)] text-[var(--color-accent-contrast)]",
+                    "transition-shadow hover:shadow-lg",
+                    "h-10 w-10 mr-2",
+                  )}
+                >
+                  <ArrowRight size={18} strokeWidth={2} />
+                </motion.button>
+              )}
+            </AnimatePresence>
+          )}
         </motion.div>
       </motion.form>
 

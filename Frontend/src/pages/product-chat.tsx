@@ -41,7 +41,15 @@ function buildContext(r: SearchResult): Record<string, unknown> {
     if (r.carbohydrates != null) ctx.carbohydrates_g = r.carbohydrates
     if (r.fats != null) ctx.fats_g = r.fats
     if (r.fibre != null) ctx.fibre_g = r.fibre
+    if (r.free_sugar != null) ctx.free_sugar_g = r.free_sugar
+    if (r.sodium != null) ctx.sodium_mg = r.sodium
+    if (r.calcium != null) ctx.calcium_mg = r.calcium
+    if (r.iron != null) ctx.iron_mg = r.iron
+    if (r.vitamin_c != null) ctx.vitamin_c_mg = r.vitamin_c
+    if (r.folate != null) ctx.folate_mcg = r.folate
     if (r.prep_time_mins != null) ctx.prep_time_mins = r.prep_time_mins
+    if (r.raw_ingredients) ctx.ingredients = r.raw_ingredients
+    if (r.instructions) ctx.cooking_instructions = r.instructions
   } else {
     if (r.brand) ctx.brand = r.brand
     if (r.category) ctx.category = r.category
@@ -50,6 +58,8 @@ function buildContext(r: SearchResult): Record<string, unknown> {
     if (r.carbohydrates_100g != null) ctx.carbs_per_100g = r.carbohydrates_100g
     if (r.fat_100g != null) ctx.fat_per_100g = r.fat_100g
     if (r.fiber_100g != null) ctx.fiber_per_100g = r.fiber_100g
+    if (r.sugars_100g != null) ctx.sugars_per_100g = r.sugars_100g
+    if (r.sodium_100g != null) ctx.sodium_per_100g = r.sodium_100g
     if (r.nutriscore_grade) ctx.nutriscore = r.nutriscore_grade
     if (r.nova_group != null) ctx.nova_group = r.nova_group
   }

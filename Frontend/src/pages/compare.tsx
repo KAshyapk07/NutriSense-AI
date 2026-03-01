@@ -8,7 +8,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeftRight, Sparkles, ChevronDown } from 'lucide-react'
+import { ArrowLeftRight, ChevronDown } from 'lucide-react'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
 
@@ -50,101 +50,100 @@ export default function ComparePage() {
       <Header />
       <main className="mx-auto max-w-screen-2xl px-4 sm:px-6 lg:px-16 py-14">
         <div className="flex gap-12 xl:gap-16 items-start">
-          {/* ── Left: form column ── */}
+          {/* Left: form column */}
           <div className="flex-1 min-w-0">
-        {/* Heading */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-10 text-center"
-        >
-          <p className="text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)] mb-2">
-            Compare Dishes
-          </p>
-          <h1 className="text-3xl font-bold text-[var(--color-text)] mb-3">
-            Side-by-side nutrition
-          </h1>
-          <p className="text-sm text-[var(--color-text-muted)] max-w-sm mx-auto leading-relaxed">
-            Enter any two dishes, recipes, or packaged products to get a
-            detailed nutritional comparison with an AI recommendation.
-          </p>
-        </motion.div>
-
-        {/* Quick examples */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08 }}
-          className="mb-8 flex flex-wrap gap-2 justify-center"
-        >
-          {QUICK_EXAMPLES.map(([a, b]) => (
-            <button
-              key={`${a}-${b}`}
-              onClick={() => applyExample(a, b)}
-              className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/50 hover:text-[var(--color-text)] transition-colors"
+            {/* Heading */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-10"
             >
-              {a} vs {b}
-            </button>
-          ))}
-        </motion.div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)] mb-2">
+                Compare Dishes
+              </p>
+              <h1 className="text-3xl font-bold text-[var(--color-text)] mb-3">
+                Side-by-side nutrition
+              </h1>
+              <p className="text-sm text-[var(--color-text-muted)] max-w-lg leading-relaxed">
+                Enter any two dishes, recipes, or packaged products to get a
+                detailed nutritional comparison with an AI recommendation.
+              </p>
+            </motion.div>
 
-        {/* Two food inputs */}
-        <motion.form
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          onSubmit={handleSubmit}
-          className="flex flex-col gap-4"
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-            {/* Food A */}
-            <FoodInputCard
-              label="First food"
-              placeholder="e.g. Butter Chicken"
-              value={foodA.value}
-              foodType={foodA.type}
-              onChange={(v) => setFoodA((p) => ({ ...p, value: v }))}
-              onTypeChange={(t) => setFoodA((p) => ({ ...p, type: t }))}
-            />
+            {/* Quick examples */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08 }}
+              className="mb-8 flex flex-wrap gap-2"
+            >
+              {QUICK_EXAMPLES.map(([a, b]) => (
+                <button
+                  key={`${a}-${b}`}
+                  onClick={() => applyExample(a, b)}
+                  className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/50 hover:text-[var(--color-text)] transition-colors"
+                >
+                  {a} vs {b}
+                </button>
+              ))}
+            </motion.div>
 
-            {/* VS divider */}
-            <div className="flex items-center justify-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]">
-                <ArrowLeftRight size={16} className="text-[var(--color-text-muted)]" />
+            {/* Two food inputs */}
+            <motion.form
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              onSubmit={handleSubmit}
+              className="flex flex-col gap-4"
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+                {/* Food A */}
+                <FoodInputCard
+                  label="First food"
+                  placeholder="e.g. Butter Chicken"
+                  value={foodA.value}
+                  foodType={foodA.type}
+                  onChange={(v) => setFoodA((p) => ({ ...p, value: v }))}
+                  onTypeChange={(t) => setFoodA((p) => ({ ...p, type: t }))}
+                />
+
+                {/* VS divider */}
+                <div className="flex items-center justify-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]">
+                    <ArrowLeftRight size={16} className="text-[var(--color-text-muted)]" />
+                  </div>
+                </div>
+
+                {/* Food B */}
+                <FoodInputCard
+                  label="Second food"
+                  placeholder="e.g. Paneer Tikka"
+                  value={foodB.value}
+                  foodType={foodB.type}
+                  onChange={(v) => setFoodB((p) => ({ ...p, value: v }))}
+                  onTypeChange={(t) => setFoodB((p) => ({ ...p, type: t }))}
+                />
               </div>
-            </div>
 
-            {/* Food B */}
-            <FoodInputCard
-              label="Second food"
-              placeholder="e.g. Paneer Tikka"
-              value={foodB.value}
-              foodType={foodB.type}
-              onChange={(v) => setFoodB((p) => ({ ...p, value: v }))}
-              onTypeChange={(t) => setFoodB((p) => ({ ...p, type: t }))}
-            />
+              {/* Submit */}
+              <div className="flex justify-center pt-2">
+                <button
+                  type="submit"
+                  disabled={!canSubmit}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-semibold transition-all',
+                    canSubmit
+                      ? 'bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:opacity-90 shadow-lg shadow-[var(--color-accent)]/20'
+                      : 'bg-[var(--color-border)] text-[var(--color-text-muted)] cursor-not-allowed',
+                  )}
+                >
+                  Compare
+                </button>
+              </div>
+            </motion.form>
           </div>
 
-          {/* Submit */}
-          <div className="flex justify-center pt-2">
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className={cn(
-                'inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-semibold transition-all',
-                canSubmit
-                  ? 'bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:opacity-90 shadow-lg shadow-[var(--color-accent)]/20'
-                  : 'bg-[var(--color-border)] text-[var(--color-text-muted)] cursor-not-allowed',
-              )}
-            >
-              <Sparkles size={16} />
-              Compare with AI
-            </button>
-          </div>
-        </motion.form>
-          </div>{/* end form column */}
-
-          {/* ── Right: desktop info panel ── */}
+          {/* Right: desktop info panel */}
           <aside className="hidden xl:flex flex-col gap-5 w-80 flex-shrink-0 pt-16">
             <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-accent)] mb-4">How it works</h3>
@@ -184,7 +183,7 @@ export default function ComparePage() {
               </p>
             </div>
           </aside>
-        </div>{/* end flex row */}
+        </div>
       </main>
     </div>
   )
