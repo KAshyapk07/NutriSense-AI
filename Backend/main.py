@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from Backend.api import chat as chat_api
+from Backend.api import chef as chef_api
 from Backend.api import health as health_api
 from Backend.api import process as process_api
 from Backend.api import search as search_api
@@ -45,6 +46,7 @@ app.include_router(process_api.router)
 app.include_router(health_api.router)
 app.include_router(search_api.router)
 app.include_router(chat_api.router)
+app.include_router(chef_api.router)
 
 
 # Exception handlers

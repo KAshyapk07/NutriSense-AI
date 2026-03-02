@@ -4,6 +4,7 @@ import {
   X,
   Home,
   Camera,
+  ChefHat,
   GitCompare,
   Sliders,
   User,
@@ -55,6 +56,12 @@ const featureItems: NavItem[] = [
     description: 'Lighter alternatives for your favourite dishes',
     icon: Leaf,
     path: '/healthy-swaps',
+  },
+  {
+    label: 'AI Chef Mode',
+    description: 'Interactive step-by-step cook mode with timers',
+    icon: ChefHat,
+    path: '/chef',
   },
 ]
 

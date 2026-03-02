@@ -7,6 +7,7 @@ import ImagePage from './pages/image'
 import ComparePage from './pages/compare'
 import ModifyPage from './pages/modify'
 import HealthySwapsPage from './pages/healthy-swaps'
+import ChefPage from './pages/chef'
 import Profile from './pages/profile'
 import Settings from './pages/settings'
 import { Sidebar } from './components/layout/sidebar'
@@ -26,6 +27,7 @@ function App() {
         <Route path="/compare" element={<ComparePage />} />
         <Route path="/modify" element={<ModifyPage />} />
         <Route path="/healthy-swaps" element={<HealthySwapsPage />} />
+        <Route path="/chef" element={<ChefPage />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>

@@ -170,3 +170,37 @@ export interface ChatRequest {
 export interface ChatResponseData {
   reply: string
 }
+
+/* ──────────────────────────────────────────────
+   Phase 5 — AI Chef Agent types
+   Mirroring Backend/schemas/chef.py
+   ────────────────────────────────────────────── */
+
+export interface MiseEnPlaceItem {
+  id: number
+  text: string
+  duration_minutes: number | null
+}
+
+export interface CookStep {
+  id: number
+  action: string
+  timer_seconds: number | null
+  tool: string | null
+  tip: string | null
+}
+
+export interface ChefParseRequest {
+  recipe_name: string
+  instructions?: string | null
+  ingredients?: string | null
+}
+
+export interface ChefParseResponse {
+  recipe_name: string
+  mise_en_place: MiseEnPlaceItem[]
+  steps: CookStep[]
+  tools_required: string[]
+  estimated_total_minutes: number | null
+  parse_error: string | null
+}

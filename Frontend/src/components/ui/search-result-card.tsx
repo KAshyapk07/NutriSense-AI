@@ -1,5 +1,6 @@
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, ChefHat } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { SearchResult } from '@/lib/types'
@@ -114,6 +115,7 @@ export function SearchResultCard({
   index = 0,
   onChat,
 }: SearchResultCardProps) {
+  const navigate = useNavigate()
   const isRecipe = result.cluster === 'recipe'
   const rows = buildNutritionRows(result)
   const scorePct = Math.round(result.final_score * 100)
@@ -195,14 +197,26 @@ export function SearchResultCard({
         </CollapsibleSection>
       )}
 
-      {/* ── Footer: Ask AI button ── */}
-      <div className="border-t border-[var(--color-border)] px-6 py-3">
+      {/* ── Footer: action buttons ── */}
+      <div className="border-t border-[var(--color-border)] px-6 py-3 flex flex-wrap gap-2">
         <button
           onClick={(e) => { e.stopPropagation(); onChat?.(result) }}
           className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-muted)] px-4 py-2 hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/50 transition-colors"
         >
           Ask AI about this
         </button>
+        {isRecipe && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate('/chef', { state: { recipe: result } })
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-muted)] px-4 py-2 hover:text-[var(--color-text)] hover:border-[var(--color-accent)]/50 transition-colors"
+          >
+            <ChefHat size={15} />
+            Open in AI Chef Mode
+          </button>
+        )}
       </div>
     </motion.div>
   )
