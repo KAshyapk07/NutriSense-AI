@@ -12,6 +12,23 @@ Returns a structured cook-session object:
     - steps: sequential cooking steps, each with optional timer_seconds + tool
     - tools_required: list of kitchen tools
     - estimated_total_minutes: approximate total cook time
+
+POST /chef/intent
+    Body (JSON):
+        - raw_text:        str  (voice transcript from phone)
+        - recipe_name:     str
+        - current_step:    int
+        - total_steps:     int
+        - current_action:  str
+        - timer_running:   bool
+        - timer_seconds_left: int | None
+
+Returns a structured voice intent:
+    - action:     NEXT | PREV | DONE | STRIKE | TIMER_START | TIMER_PAUSE | ...
+    - step:       int | None
+    - question:   str | None
+    - confidence: float
+    - filtered:   bool
 """
 
 import json
@@ -23,10 +40,13 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from Backend.dependencies.router import get_router
 from Backend.schemas.chef import (
+    ChefIntentRequest,
+    ChefIntentResponse,
     ChefParseRequest,
     ChefParseResponse,
     CookStep,
     MiseEnPlaceItem,
+    VoiceAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -517,4 +537,173 @@ async def chef_parse(body: ChefParseRequest, nutri_router=Depends(get_router)):
         recipe_name=body.recipe_name,
         steps=[],
         parse_error="Could not parse the recipe after multiple attempts. Please try again.",
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  Voice Intent Parsing  (P2P Kitchen Remote)
+# ══════════════════════════════════════════════════════════════════════
+
+# ── Keyword gate: only cooking-relevant speech passes to the LLM ──
+
+_COOKING_KEYWORDS = re.compile(
+    r"\b("
+    r"next|previous|prev|back|go back|skip|done|finish|finished|complete|completed"
+    r"|start|stop|pause|resume|timer|reset|restart"
+    r"|repeat|again|say that|what|how|why|help|tip|ingredient"
+    r"|ready|move on|mark|strike|check|uncheck"
+    r"|first|last|step|number|one|two|three|four|five|six|seven|eight|nine|ten"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _is_cooking_relevant(text: str) -> bool:
+    """Return True only if the text contains cooking-intent keywords.
+
+    This is the pre-filter that prevents random kitchen chatter
+    ('pass me the salt', 'the dog is barking') from ever reaching the LLM.
+    """
+    return bool(_COOKING_KEYWORDS.search(text))
+
+
+# ── Fast heuristic shortcuts (no LLM needed) ──
+
+_HEURISTIC_PATTERNS: list[tuple[re.Pattern, VoiceAction]] = [
+    (re.compile(r"\b(next\s*(step)?|move\s*on|skip|go\s*ahead)\b", re.I), VoiceAction.NEXT),
+    (re.compile(r"\b(prev(ious)?\s*(step)?|go\s*back|back)\b", re.I), VoiceAction.PREV),
+    (re.compile(r"\b(done|finish(ed)?|complete(d)?|all\s*done)\b", re.I), VoiceAction.DONE),
+    (re.compile(r"\b(start\s*timer|begin\s*timer|timer\s*start|start\s*the\s*timer)\b", re.I), VoiceAction.TIMER_START),
+    (re.compile(r"\b(stop\s*timer|pause\s*timer|timer\s*(stop|pause)|pause\s*the\s*timer)\b", re.I), VoiceAction.TIMER_PAUSE),
+    (re.compile(r"\b(reset\s*timer|timer\s*reset|restart\s*timer)\b", re.I), VoiceAction.TIMER_RESET),
+    (re.compile(r"\b(repeat|say\s*(that|it)\s*again|read\s*(it|step)\s*(again)?)\b", re.I), VoiceAction.REPEAT),
+]
+
+
+def _try_heuristic(text: str) -> VoiceAction | None:
+    """Attempt to resolve intent via fast regex without calling the LLM."""
+    for pattern, action in _HEURISTIC_PATTERNS:
+        if pattern.search(text):
+            return action
+    return None
+
+
+# ── LLM intent prompt ──
+
+def _build_intent_prompt(body: ChefIntentRequest) -> str:
+    timer_ctx = ""
+    if body.timer_running and body.timer_seconds_left is not None:
+        timer_ctx = f"Timer is RUNNING with {body.timer_seconds_left}s left."
+    elif body.timer_seconds_left is not None:
+        timer_ctx = f"Timer is PAUSED at {body.timer_seconds_left}s."
+    else:
+        timer_ctx = "No timer for this step."
+
+    return f"""<SYSTEM>
+You are a kitchen voice-command interpreter. Parse the user's spoken command into exactly one JSON action.
+Respond with ONLY a JSON object — no explanations.
+</SYSTEM>
+
+<CONTEXT>
+Dish: {body.recipe_name}
+Step {body.current_step} of {body.total_steps}: "{body.current_action}"
+{timer_ctx}
+</CONTEXT>
+
+<USER_SPEECH>
+"{body.raw_text}"
+</USER_SPEECH>
+
+<ACTIONS>
+- NEXT: go to the next cooking step
+- PREV: go to the previous step
+- DONE: mark current step as finished and advance (same as NEXT but marks completion)
+- STRIKE: mark a specific step as done by number  (requires "step" field, 1-based)
+- TIMER_START: start/resume the timer for the current step
+- TIMER_PAUSE: pause the timer
+- TIMER_RESET: reset the timer to its original duration
+- REPEAT: read the current step instructions again
+- ASK: the user is asking a cooking question (set "question" field with the question text)
+- NOOP: the speech is unrelated to cooking navigation
+</ACTIONS>
+
+<OUTPUT_FORMAT>
+{{"action": "NEXT", "step": null, "question": null}}
+</OUTPUT_FORMAT>
+
+<RULES>
+- Pick the single most likely action.
+- For ASK, extract the core question into the "question" field.
+- For STRIKE, set "step" to the step number mentioned (1-based integer).
+- If the speech is clearly not a cooking command, return NOOP.
+- Output ONLY the JSON object. No markdown, no text.
+</RULES>"""
+
+
+# ── Endpoint ──
+
+@router.post("/chef/intent", response_model=ChefIntentResponse)
+async def chef_intent(body: ChefIntentRequest, nutri_router=Depends(get_router)):
+    """Parse raw voice text into a structured cooking intent.
+
+    Two-stage filter:
+      1. Keyword gate — rejects non-cooking speech without touching the LLM.
+      2. Heuristic patterns — resolves simple commands (next, done, timer) instantly.
+      3. LLM fallback — for ambiguous or complex commands only.
+    """
+    text = body.raw_text.strip()
+
+    # Stage 1: keyword gate — reject noise
+    if not _is_cooking_relevant(text):
+        logger.debug("Voice filtered (no cooking keywords): %r", text)
+        return ChefIntentResponse(
+            action=VoiceAction.NOOP,
+            confidence=1.0,
+            filtered=True,
+        )
+
+    # Stage 2: fast heuristic
+    heuristic = _try_heuristic(text)
+    if heuristic is not None:
+        logger.info("Voice heuristic match: %r → %s", text, heuristic.value)
+        return ChefIntentResponse(
+            action=heuristic,
+            confidence=0.95,
+            filtered=False,
+        )
+
+    # Stage 3: LLM intent parsing
+    prompt = _build_intent_prompt(body)
+    llm_engine = nutri_router.engine
+
+    try:
+        raw = await llm_engine.llm.generate_async(prompt)
+    except Exception as exc:
+        logger.exception("Chef intent LLM failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Voice processing unavailable.")
+
+    # Parse LLM JSON response
+    json_str = _extract_json(raw)
+    try:
+        data = json.loads(_repair_json(json_str))
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Chef intent JSON parse failed: %r", raw[:300])
+        return ChefIntentResponse(
+            action=VoiceAction.NOOP,
+            confidence=0.3,
+            filtered=False,
+        )
+
+    action_str = str(data.get("action", "NOOP")).upper()
+    try:
+        action = VoiceAction(action_str)
+    except ValueError:
+        action = VoiceAction.NOOP
+
+    return ChefIntentResponse(
+        action=action,
+        step=data.get("step"),
+        question=data.get("question"),
+        confidence=0.85,
+        filtered=False,
     )

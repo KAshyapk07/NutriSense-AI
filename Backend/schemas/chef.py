@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from enum import Enum
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
+
+
+# ── Chef Parse (existing) ──────────────────────────────────────────
 
 
 class ChefParseRequest(BaseModel):
@@ -35,3 +39,63 @@ class ChefParseResponse(BaseModel):
     tools_required: List[str] = Field(default_factory=list)
     estimated_total_minutes: Optional[int] = None
     parse_error: Optional[str] = None
+
+
+# ── Voice Intent (P2P Kitchen Remote) ──────────────────────────────
+
+
+class VoiceAction(str, Enum):
+    """Actions the voice command can resolve to."""
+
+    NEXT = "NEXT"
+    PREV = "PREV"
+    DONE = "DONE"
+    STRIKE = "STRIKE"
+    TIMER_START = "TIMER_START"
+    TIMER_PAUSE = "TIMER_PAUSE"
+    TIMER_RESET = "TIMER_RESET"
+    REPEAT = "REPEAT"
+    ASK = "ASK"
+    NOOP = "NOOP"
+
+
+class ChefIntentRequest(BaseModel):
+    """Raw voice transcript + cooking context sent from the PC frontend."""
+
+    raw_text: str = Field(..., min_length=1, description="Raw speech-to-text transcript from the phone")
+    recipe_name: str = Field(..., min_length=1, description="Name of the dish being cooked")
+    current_step: int = Field(..., ge=1, description="1-based index of the current cooking step")
+    total_steps: int = Field(..., ge=1, description="Total number of cooking steps")
+    current_action: str = Field(..., description="Text of the current cooking step")
+    timer_running: bool = Field(False, description="Whether the step timer is currently running")
+    timer_seconds_left: Optional[int] = Field(None, description="Seconds remaining on the timer, if any")
+
+
+class ChefIntentResponse(BaseModel):
+    """Structured intent parsed from voice command."""
+
+    action: VoiceAction = Field(..., description="The resolved action to take")
+    step: Optional[int] = Field(None, description="Target step number (1-based), for STRIKE action")
+    question: Optional[str] = Field(None, description="Question text if action is ASK")
+    confidence: float = Field(1.0, ge=0.0, le=1.0, description="Confidence in the parsed intent")
+    filtered: bool = Field(False, description="True if the text was filtered out as non-cooking noise")
+
+
+class CookingSessionState(BaseModel):
+    """Full cooking session state pushed from PC to phone over WebRTC."""
+
+    recipe_name: str
+    current_step: int  # 1-based
+    total_steps: int
+    current_action: str
+    current_tool: Optional[str] = None
+    current_tip: Optional[str] = None
+    timer_total: Optional[int] = None
+    timer_left: Optional[int] = None
+    timer_running: bool = False
+    completed_steps: List[int] = Field(default_factory=list)
+    phase: str = "cooking"  # "prep" | "cooking" | "done"
+    steps_overview: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="Compact list of {id, action, completed} for all steps",
+    )

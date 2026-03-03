@@ -1,4 +1,4 @@
-import type { ProcessResponse, SearchResponse, SearchFilters, ChatRequest, ChatResponseData, ChefParseRequest, ChefParseResponse } from './types'
+import type { ProcessResponse, SearchResponse, SearchFilters, ChatRequest, ChatResponseData, ChefParseRequest, ChefParseResponse, ChefIntentRequest, ChefIntentResponse } from './types'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -65,6 +65,21 @@ export async function chatWithProduct(body: ChatRequest): Promise<ChatResponseDa
 
 export async function chefParse(body: ChefParseRequest): Promise<ChefParseResponse> {
   const res = await fetch(`${API_BASE}/chef/parse`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Server error ${res.status}: ${text}`)
+  }
+
+  return res.json()
+}
+
+export async function chefIntent(body: ChefIntentRequest): Promise<ChefIntentResponse> {
+  const res = await fetch(`${API_BASE}/chef/intent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

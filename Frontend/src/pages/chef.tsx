@@ -8,6 +8,7 @@
  * 3. LLM structures instructions into Prep + Cook Steps.
  * 4. Step-by-step cook mode with per-step countdown timers.
  * 5. Context-aware Q&A chat panel that knows the current cooking stage.
+ * 6. P2P phone remote: QR → WebRTC → voice commands from kitchen.
  */
 import {
   useState,
@@ -38,13 +39,20 @@ import {
   Flame,
   Clock,
   UtensilsCrossed,
+  Smartphone,
+  Mic,
+  Wifi,
+  X,
 } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
-import { searchQuery, chefParse, chatWithProduct } from '@/lib/api'
+import { searchQuery, chefParse, chatWithProduct, chefIntent } from '@/lib/api'
+import { usePeerConnection } from '@/hooks/use-peer-connection'
 import type {
   ChefParseResponse,
   CookStep,
+  CookingSessionState,
   MiseEnPlaceItem,
   SearchResult,
 } from '@/lib/types'
@@ -423,6 +431,22 @@ function StepTimer({
   useEffect(() => {
     onStateChange?.({ running, timeLeft, total: seconds })
   }, [running, timeLeft, seconds, onStateChange])
+
+  // Listen for voice-driven timer commands from the P2P pipeline
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail
+      if (detail === 'start') setRunning(true)
+      else if (detail === 'pause') setRunning(false)
+      else if (detail === 'reset') {
+        setTimeLeft(seconds)
+        setRunning(false)
+        completedRef.current = false
+      }
+    }
+    window.addEventListener('chef-timer-control', handler)
+    return () => window.removeEventListener('chef-timer-control', handler)
+  }, [seconds])
 
   useEffect(() => {
     if (running) {
@@ -917,6 +941,177 @@ export default function ChefPage() {
     submittingRef.current = false
   }, [])
 
+  // ═══════════════════════════════════════════════════════════════════
+  //  P2P Kitchen Remote (WebRTC via PeerJS)
+  // ═══════════════════════════════════════════════════════════════════
+
+  const REMOTE_BASE_URL =
+    import.meta.env.VITE_REMOTE_URL ?? `${window.location.origin}/chef-remote`
+
+  const peer = usePeerConnection()
+  const [showQR, setShowQR] = useState(false)
+  const [lastVoiceText, setLastVoiceText] = useState<string | null>(null)
+  const processingVoiceRef = useRef(false)
+
+  // -- Build the state snapshot to push to phone --
+  const buildSessionState = useCallback((): CookingSessionState | null => {
+    if (!chefData) return null
+    const step = chefData.steps[stepIndex]
+    if (!step) return null
+    return {
+      recipe_name: chefData.recipe_name,
+      current_step: stepIndex + 1,
+      total_steps: totalSteps,
+      current_action: step.action,
+      current_tool: step.tool ?? null,
+      current_tip: step.tip ?? null,
+      timer_total: step.timer_seconds ?? null,
+      timer_left: timerState?.timeLeft ?? null,
+      timer_running: timerState?.running ?? false,
+      completed_steps: Array.from(completedSteps),
+      phase: phase as 'prep' | 'cooking' | 'done',
+      steps_overview: chefData.steps.map((s) => ({
+        id: String(s.id),
+        action: s.action.length > 60 ? s.action.slice(0, 57) + '...' : s.action,
+        completed: completedSteps.has(s.id) ? 'true' : 'false',
+      })),
+    }
+  }, [chefData, stepIndex, totalSteps, timerState, completedSteps, phase])
+
+  // -- Push state to phone whenever it changes --
+  useEffect(() => {
+    if (!peer.connected) return
+    const state = buildSessionState()
+    if (state) peer.sendState(state)
+  }, [peer.connected, buildSessionState, peer.sendState])
+
+  // -- Handle incoming voice text from phone --
+  const handleVoiceFromPhone = useCallback(
+    async (text: string) => {
+      if (processingVoiceRef.current || !chefData) return
+      processingVoiceRef.current = true
+      setLastVoiceText(text)
+
+      try {
+        const intent = await chefIntent({
+          raw_text: text,
+          recipe_name: chefData.recipe_name,
+          current_step: currentStep ? stepIndex + 1 : 1,
+          total_steps: totalSteps,
+          current_action: currentStep?.action ?? 'Preparing ingredients',
+          timer_running: timerState?.running ?? false,
+          timer_seconds_left: timerState?.timeLeft ?? null,
+        })
+
+        if (intent.filtered) {
+          // Non-cooking noise — ignore silently
+          return
+        }
+
+        switch (intent.action) {
+          case 'NEXT':
+          case 'DONE':
+            handleStepComplete()
+            break
+          case 'PREV':
+            handlePrevStep()
+            break
+          case 'STRIKE': {
+            const targetStep = intent.step
+            if (targetStep && targetStep >= 1 && targetStep <= totalSteps) {
+              const targetId = chefData.steps[targetStep - 1]?.id
+              if (targetId) {
+                setCompletedSteps((prev) => {
+                  const next = new Set(prev)
+                  next.add(targetId)
+                  return next
+                })
+              }
+            }
+            break
+          }
+          case 'TIMER_START':
+            // Timer control is handled via timerState — we dispatch a custom event
+            window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'start' }))
+            break
+          case 'TIMER_PAUSE':
+            window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'pause' }))
+            break
+          case 'TIMER_RESET':
+            window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'reset' }))
+            break
+          case 'REPEAT':
+            // Push current state again to phone (re-read)
+            if (peer.connected) {
+              const state = buildSessionState()
+              if (state) peer.sendState(state)
+            }
+            break
+          case 'ASK':
+            if (intent.question) {
+              // Inject the question into the Q&A
+              setQaInput(intent.question)
+              // Auto-submit
+              const userMessage: QAMessage = { role: 'user', content: intent.question }
+              const newMessages = [...qaMessages, userMessage]
+              setQaMessages(newMessages)
+              try {
+                let contextPrefix = ''
+                if (phase === 'prep') {
+                  contextPrefix = `[PREPARATION PHASE - voice command] Recipe: ${chefData.recipe_name}. The user is preparing mise en place before cooking.\n\nUser asks: `
+                } else if (phase === 'cooking' && cookingContext) {
+                  contextPrefix = `[COOKING SESSION - voice command] ${cookingContext}\n\nUser asks: `
+                }
+                const res = await chatWithProduct({
+                  message: `${contextPrefix}${intent.question}`,
+                  context: recipeContext ?? undefined,
+                  history: qaMessages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+                })
+                setQaMessages([...newMessages, { role: 'assistant', content: res.reply }])
+              } catch {
+                setQaMessages([
+                  ...newMessages,
+                  { role: 'assistant', content: 'Sorry, I could not answer that.' },
+                ])
+              }
+              setQaInput('')
+            }
+            break
+          case 'NOOP':
+          default:
+            break
+        }
+      } catch (err) {
+        console.error('Voice intent processing error:', err)
+      } finally {
+        processingVoiceRef.current = false
+      }
+    },
+    [
+      chefData,
+      currentStep,
+      stepIndex,
+      totalSteps,
+      timerState,
+      handleStepComplete,
+      handlePrevStep,
+      peer,
+      buildSessionState,
+      qaMessages,
+      phase,
+      cookingContext,
+      recipeContext,
+    ],
+  )
+
+  // Register voice callback
+  useEffect(() => {
+    peer.onVoiceText(handleVoiceFromPhone)
+  }, [peer.onVoiceText, handleVoiceFromPhone])
+
+  // QR code URL
+  const qrUrl = peer.peerId ? `${REMOTE_BASE_URL}?peer=${peer.peerId}` : null
+
   // -- Render ----------------------------------------------------------------
 
   const isWidePhase = phase === 'prep' || phase === 'cooking'
@@ -1090,154 +1285,217 @@ export default function ChefPage() {
             </motion.div>
           )}
 
-          {/* PHASE: Preparation — wide 2-column layout on desktop */}
+          {/* PHASE: Preparation — single-column layout with inline phone card + chat below */}
           {phase === 'prep' && chefData && (
             <motion.div
               key="prep"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 items-start"
+              className="flex flex-col gap-8"
             >
-              {/* LEFT: Main prep content */}
-              <div className="flex flex-col gap-6 min-w-0">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <button
-                      onClick={resetAll}
-                      className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors mb-2"
-                    >
-                      <ArrowLeft size={12} /> New search
-                    </button>
-                    <h2 className="text-2xl font-bold capitalize">
-                      {chefData.recipe_name}
-                    </h2>
-                    <p className="text-xs uppercase tracking-widest text-[var(--color-muted)] mt-1">
-                      Preparation
-                    </p>
+              {/* TOP ROW: prep content + phone remote card side-by-side on desktop */}
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 items-start">
+                {/* LEFT: Main prep content */}
+                <div className="flex flex-col gap-6 min-w-0">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <button
+                        onClick={resetAll}
+                        className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors mb-2"
+                      >
+                        <ArrowLeft size={12} /> New search
+                      </button>
+                      <h2 className="text-2xl font-bold capitalize">
+                        {chefData.recipe_name}
+                      </h2>
+                      <p className="text-xs uppercase tracking-widest text-[var(--color-muted)] mt-1">
+                        Preparation
+                      </p>
+                    </div>
+                    <div className="text-center px-4 py-2 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)]">
+                      <p className="text-2xl font-bold text-[var(--color-accent)]">
+                        {prepChecked.size}/{chefData.mise_en_place.length}
+                      </p>
+                      <p className="text-xs text-[var(--color-muted)]">ready</p>
+                    </div>
                   </div>
-                  <div className="text-center px-4 py-2 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)]">
-                    <p className="text-2xl font-bold text-[var(--color-accent)]">
-                      {prepChecked.size}/{chefData.mise_en_place.length}
-                    </p>
-                    <p className="text-xs text-[var(--color-muted)]">ready</p>
+
+                  <div className="flex flex-wrap gap-3">
+                    {chefData.estimated_total_minutes && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-muted)]">
+                        <Timer size={13} />
+                        {formatMinutes(chefData.estimated_total_minutes)} total
+                      </div>
+                    )}
+                    {chefData.steps.length > 0 && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-muted)]">
+                        <UtensilsCrossed size={13} />
+                        {chefData.steps.length} steps
+                      </div>
+                    )}
+                    {chefData.tools_required.length > 0 && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-muted)]">
+                        <Wrench size={13} />
+                        {chefData.tools_required.join(', ')}
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                <div className="flex flex-wrap gap-3">
-                  {chefData.estimated_total_minutes && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-muted)]">
-                      <Timer size={13} />
-                      {formatMinutes(chefData.estimated_total_minutes)} total
-                    </div>
-                  )}
-                  {chefData.steps.length > 0 && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-muted)]">
-                      <UtensilsCrossed size={13} />
-                      {chefData.steps.length} steps
-                    </div>
-                  )}
-                  {chefData.tools_required.length > 0 && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-muted)]">
-                      <Wrench size={13} />
-                      {chefData.tools_required.join(', ')}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">
-                    Before you start
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {chefData.mise_en_place.map((item: MiseEnPlaceItem) => {
-                      const checked = prepChecked.has(item.id)
-                      return (
-                        <motion.button
-                          key={item.id}
-                          onClick={() =>
-                            setPrepChecked((prev) => {
-                              const next = new Set(prev)
-                              checked ? next.delete(item.id) : next.add(item.id)
-                              return next
-                            })
-                          }
-                          className={cn(
-                            'flex items-start gap-3 p-4 rounded-2xl border text-left transition-all',
-                            checked
-                              ? 'border-green-400/50 bg-green-50 dark:bg-green-900/15'
-                              : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]',
-                          )}
-                          whileHover={{ scale: 1.005 }}
-                          whileTap={{ scale: 0.995 }}
-                        >
-                          {checked ? (
-                            <CheckCircle2
-                              size={20}
-                              className="text-green-500 flex-shrink-0 mt-0.5"
-                            />
-                          ) : (
-                            <Circle
-                              size={20}
-                              className="text-[var(--color-muted)] flex-shrink-0 mt-0.5"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p
-                              className={cn(
-                                'text-sm leading-relaxed',
-                                checked && 'line-through text-[var(--color-muted)]',
-                              )}
-                            >
-                              {item.text}
-                            </p>
-                            {item.duration_minutes && !checked && (
-                              <p className="text-xs text-[var(--color-muted)] mt-0.5 flex items-center gap-1">
-                                <Timer size={11} /> ~{item.duration_minutes} min
-                              </p>
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider">
+                      Before you start
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {chefData.mise_en_place.map((item: MiseEnPlaceItem) => {
+                        const checked = prepChecked.has(item.id)
+                        return (
+                          <motion.button
+                            key={item.id}
+                            onClick={() =>
+                              setPrepChecked((prev) => {
+                                const next = new Set(prev)
+                                checked ? next.delete(item.id) : next.add(item.id)
+                                return next
+                              })
+                            }
+                            className={cn(
+                              'flex items-start gap-3 p-4 rounded-2xl border text-left transition-all',
+                              checked
+                                ? 'border-green-400/50 bg-green-50 dark:bg-green-900/15'
+                                : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]',
                             )}
-                          </div>
-                        </motion.button>
-                      )
-                    })}
+                            whileHover={{ scale: 1.005 }}
+                            whileTap={{ scale: 0.995 }}
+                          >
+                            {checked ? (
+                              <CheckCircle2
+                                size={20}
+                                className="text-green-500 flex-shrink-0 mt-0.5"
+                              />
+                            ) : (
+                              <Circle
+                                size={20}
+                                className="text-[var(--color-muted)] flex-shrink-0 mt-0.5"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p
+                                className={cn(
+                                  'text-sm leading-relaxed',
+                                  checked && 'line-through text-[var(--color-muted)]',
+                                )}
+                              >
+                                {item.text}
+                              </p>
+                              {item.duration_minutes && !checked && (
+                                <p className="text-xs text-[var(--color-muted)] mt-0.5 flex items-center gap-1">
+                                  <Timer size={11} /> ~{item.duration_minutes} min
+                                </p>
+                              )}
+                            </div>
+                          </motion.button>
+                        )
+                      })}
+                    </div>
                   </div>
+
+                  <motion.button
+                    onClick={() => setPhase('cooking')}
+                    disabled={!canStartCooking}
+                    className={cn(
+                      'flex items-center justify-center gap-2 w-full py-4 rounded-2xl font-semibold text-sm transition-all mt-2',
+                      canStartCooking
+                        ? 'bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:opacity-90'
+                        : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-border)] cursor-not-allowed',
+                    )}
+                    whileHover={canStartCooking ? { scale: 1.01 } : {}}
+                    whileTap={canStartCooking ? { scale: 0.99 } : {}}
+                  >
+                    {canStartCooking ? (
+                      <>
+                        <ArrowRight size={18} /> Start Cooking
+                      </>
+                    ) : (
+                      <>Complete all preparation to continue</>
+                    )}
+                  </motion.button>
                 </div>
 
-                <motion.button
-                  onClick={() => setPhase('cooking')}
-                  disabled={!canStartCooking}
-                  className={cn(
-                    'flex items-center justify-center gap-2 w-full py-4 rounded-2xl font-semibold text-sm transition-all mt-2',
-                    canStartCooking
-                      ? 'bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:opacity-90'
-                      : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-border)] cursor-not-allowed',
-                  )}
-                  whileHover={canStartCooking ? { scale: 1.01 } : {}}
-                  whileTap={canStartCooking ? { scale: 0.99 } : {}}
-                >
-                  {canStartCooking ? (
+                {/* RIGHT: Phone Remote — inline card with QR */}
+                <div className="lg:sticky lg:top-24 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 flex flex-col items-center gap-4">
+                  <div className="w-full">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Smartphone size={15} className="text-[var(--color-accent)]" />
+                      <span className="text-sm font-semibold">Kitchen Remote</span>
+                    </div>
+                    <p className="text-xs text-[var(--color-muted)]">
+                      Scan with your phone to use as a hands-free remote
+                    </p>
+                  </div>
+
+                  {qrUrl ? (
                     <>
-                      <ArrowRight size={18} /> Start Cooking
+                      <div className="p-3 bg-white rounded-2xl">
+                        <QRCodeSVG value={qrUrl} size={160} level="M" includeMargin={false} />
+                      </div>
+
+                      {peer.connected ? (
+                        <div className="flex items-center gap-2 text-xs font-medium text-green-600 dark:text-green-400">
+                          <Wifi size={14} />
+                          Phone connected
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs text-[var(--color-muted)]">
+                          <div className="w-3.5 h-3.5 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
+                          Waiting for phone...
+                        </div>
+                      )}
+
+                      <div className="w-full rounded-xl bg-[var(--color-bg)] p-2.5 text-[10px] text-[var(--color-muted)] break-all select-all">
+                        {qrUrl}
+                      </div>
+
+                      <div className="text-[10px] text-[var(--color-muted)] text-center space-y-0.5">
+                        <p>1. Scan QR with phone camera</p>
+                        <p>2. Open link in browser</p>
+                        <p>3. Tap mic &amp; speak commands</p>
+                        <p className="mt-1 opacity-60">Direct P2P — no cloud</p>
+                      </div>
                     </>
                   ) : (
-                    <>Complete all preparation to continue</>
+                    <div className="flex flex-col items-center gap-2 py-4">
+                      <div className="w-6 h-6 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
+                      <p className="text-xs text-[var(--color-muted)]">Setting up P2P...</p>
+                      {peer.error && (
+                        <p className="text-[10px] text-red-500">{peer.error}</p>
+                      )}
+                    </div>
                   )}
-                </motion.button>
+
+                  {/* Voice indicator */}
+                  {lastVoiceText && peer.connected && (
+                    <div className="w-full rounded-xl bg-[var(--color-bg)] border border-[var(--color-border)] p-2.5 flex items-start gap-2">
+                      <Mic size={13} className="text-[var(--color-accent)] flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-[var(--color-muted)] italic leading-relaxed">
+                        &ldquo;{lastVoiceText}&rdquo;
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* RIGHT: Sticky chat sidebar */}
-              <div className="lg:sticky lg:top-24">
-                <ChatPanel
-                  messages={qaMessages}
-                  loading={qaLoading}
-                  input={qaInput}
-                  onInputChange={setQaInput}
-                  onSubmit={handleQASubmit}
-                  qaRef={qaRef}
-                  placeholder="Any questions about the preparation?"
-                  tall
-                />
-              </div>
+              {/* BELOW: Full-width chat panel */}
+              <ChatPanel
+                messages={qaMessages}
+                loading={qaLoading}
+                input={qaInput}
+                onInputChange={setQaInput}
+                onSubmit={handleQASubmit}
+                qaRef={qaRef}
+                placeholder="Any questions about the preparation? Voice commands also reach here."
+                tall
+              />
             </motion.div>
           )}
 
@@ -1264,14 +1522,50 @@ export default function ChefPage() {
                       {chefData.recipe_name}
                     </p>
                   </div>
-                  <p className="text-sm font-medium tabular-nums">
-                    Step{' '}
-                    <span className="text-[var(--color-accent)]">
-                      {stepIndex + 1}
-                    </span>{' '}
-                    / {totalSteps}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    {/* Phone remote connection button */}
+                    <button
+                      onClick={() => setShowQR(true)}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all',
+                        peer.connected
+                          ? 'border-green-400/50 bg-green-50 dark:bg-green-900/15 text-green-700 dark:text-green-400'
+                          : 'border-[var(--color-border)] hover:border-[var(--color-accent)] text-[var(--color-muted)]',
+                      )}
+                      title={peer.connected ? 'Phone connected' : 'Connect phone as kitchen remote'}
+                    >
+                      {peer.connected ? (
+                        <>
+                          <Wifi size={13} className="text-green-500" />
+                          Phone connected
+                        </>
+                      ) : (
+                        <>
+                          <Smartphone size={13} />
+                          Connect phone
+                        </>
+                      )}
+                    </button>
+
+                    <p className="text-sm font-medium tabular-nums">
+                      Step{' '}
+                      <span className="text-[var(--color-accent)]">
+                        {stepIndex + 1}
+                      </span>{' '}
+                      / {totalSteps}
+                    </p>
+                  </div>
                 </div>
+
+                {/* Voice command indicator */}
+                {peer.connected && lastVoiceText && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/15 border border-blue-200/50 dark:border-blue-800/40 text-xs">
+                    <Mic size={13} className="text-blue-500 flex-shrink-0" />
+                    <span className="text-blue-700 dark:text-blue-300 truncate">
+                      &quot;{lastVoiceText}&quot;
+                    </span>
+                  </div>
+                )}
 
                 <StepTimeline
                   steps={chefData.steps}
@@ -1474,6 +1768,92 @@ export default function ChefPage() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* ── QR Code Modal (Phone Remote) ── */}
+      <AnimatePresence>
+        {showQR && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowQR(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[var(--color-surface)] rounded-3xl border border-[var(--color-border)] p-8 shadow-2xl max-w-sm w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="font-bold text-lg">Connect Phone</h3>
+                  <p className="text-xs text-[var(--color-muted)] mt-0.5">
+                    Scan with your phone camera to use as a kitchen remote
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowQR(false)}
+                  className="p-1.5 rounded-lg hover:bg-[var(--color-bg)] transition-colors"
+                >
+                  <X size={18} className="text-[var(--color-muted)]" />
+                </button>
+              </div>
+
+              {qrUrl ? (
+                <div className="flex flex-col items-center gap-5">
+                  <div className="p-4 bg-white rounded-2xl">
+                    <QRCodeSVG
+                      value={qrUrl}
+                      size={200}
+                      level="M"
+                      includeMargin={false}
+                    />
+                  </div>
+
+                  {peer.connected ? (
+                    <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                      <Wifi size={16} />
+                      Phone connected — voice commands active
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <p className="text-sm text-[var(--color-muted)]">
+                        Waiting for phone to connect...
+                      </p>
+                      <div className="w-5 h-5 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
+                    </div>
+                  )}
+
+                  <div className="w-full rounded-xl bg-[var(--color-bg)] p-3 text-xs text-[var(--color-muted)] break-all select-all">
+                    {qrUrl}
+                  </div>
+
+                  <div className="text-xs text-[var(--color-muted)] text-center space-y-1">
+                    <p>1. Scan QR code with phone camera</p>
+                    <p>2. Open the link in your phone browser</p>
+                    <p>3. Tap the microphone and speak commands</p>
+                    <p className="text-[10px] mt-2">
+                      Direct P2P connection — no data goes to the cloud
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3 py-6">
+                  <div className="w-8 h-8 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
+                  <p className="text-sm text-[var(--color-muted)]">
+                    Setting up P2P connection...
+                  </p>
+                  {peer.error && (
+                    <p className="text-xs text-red-500">{peer.error}</p>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

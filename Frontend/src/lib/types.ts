@@ -204,3 +204,52 @@ export interface ChefParseResponse {
   estimated_total_minutes: number | null
   parse_error: string | null
 }
+
+/* ──────────────────────────────────────────────
+   Phase 5.5 — P2P Voice Kitchen Remote types
+   ────────────────────────────────────────────── */
+
+export type VoiceAction =
+  | 'NEXT'
+  | 'PREV'
+  | 'DONE'
+  | 'STRIKE'
+  | 'TIMER_START'
+  | 'TIMER_PAUSE'
+  | 'TIMER_RESET'
+  | 'REPEAT'
+  | 'ASK'
+  | 'NOOP'
+
+export interface ChefIntentRequest {
+  raw_text: string
+  recipe_name: string
+  current_step: number
+  total_steps: number
+  current_action: string
+  timer_running: boolean
+  timer_seconds_left: number | null
+}
+
+export interface ChefIntentResponse {
+  action: VoiceAction
+  step: number | null
+  question: string | null
+  confidence: number
+  filtered: boolean
+}
+
+export interface CookingSessionState {
+  recipe_name: string
+  current_step: number
+  total_steps: number
+  current_action: string
+  current_tool: string | null
+  current_tip: string | null
+  timer_total: number | null
+  timer_left: number | null
+  timer_running: boolean
+  completed_steps: number[]
+  phase: 'prep' | 'cooking' | 'done'
+  steps_overview: Array<{ id: string; action: string; completed: string }>
+}
