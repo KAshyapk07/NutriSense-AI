@@ -24,6 +24,12 @@ export interface PeerHookReturn {
   sendState: (state: CookingSessionState) => void
   /** Register a callback for incoming voice text from the phone. */
   onVoiceText: (cb: (text: string) => void) => void
+  /** Register a callback for incoming chat questions from the phone. */
+  onChatMessage: (cb: (text: string) => void) => void
+  /** Register a callback for structured actions from the phone. */
+  onAction: (cb: (action: string, payload?: Record<string, unknown>) => void) => void
+  /** Send a chat reply back to the phone. */
+  sendChatReply: (msg: { role: 'user' | 'assistant'; content: string }) => void
   /** Tear down the peer connection and clean up. */
   destroy: () => void
   /** Connection error message, if any. */
@@ -95,6 +101,8 @@ export function usePeerConnection(): PeerHookReturn {
   const peerRef = useRef<Peer | null>(null)
   const connRef = useRef<DataConnection | null>(null)
   const voiceCallbackRef = useRef<((text: string) => void) | null>(null)
+  const chatCallbackRef = useRef<((text: string) => void) | null>(null)
+  const actionCallbackRef = useRef<((action: string, payload?: Record<string, unknown>) => void) | null>(null)
   // Phone's peer ID learned from the WebSocket relay handshake
   const relayPeerIdRef = useRef<string | null>(null)
 
@@ -134,6 +142,12 @@ export function usePeerConnection(): PeerHookReturn {
           if (payload.text && voiceCallbackRef.current) {
             voiceCallbackRef.current(payload.text)
           }
+        } else if (payload.kind === 'chat' && typeof payload.text === 'string') {
+          if (payload.text && chatCallbackRef.current) {
+            chatCallbackRef.current(payload.text)
+          }
+        } else if (payload.kind === 'action' && typeof payload.action === 'string') {
+          actionCallbackRef.current?.(payload.action, payload as Record<string, unknown>)
         }
       })
     })
@@ -150,12 +164,21 @@ export function usePeerConnection(): PeerHookReturn {
         if (
           typeof data === 'object' &&
           data !== null &&
-          'type' in data &&
-          (data as Record<string, unknown>).type === 'voice'
+          'type' in data
         ) {
-          const text = String((data as Record<string, unknown>).text ?? '')
-          if (text && voiceCallbackRef.current) {
-            voiceCallbackRef.current(text)
+          const msg = data as Record<string, unknown>
+          if (msg.type === 'voice') {
+            const text = String(msg.text ?? '')
+            if (text && voiceCallbackRef.current) {
+              voiceCallbackRef.current(text)
+            }
+          } else if (msg.type === 'chat') {
+            const text = String(msg.text ?? '')
+            if (text && chatCallbackRef.current) {
+              chatCallbackRef.current(text)
+            }
+          } else if (msg.type === 'action') {
+            actionCallbackRef.current?.(String(msg.action ?? ''), msg as Record<string, unknown>)
           }
         }
       })
@@ -209,6 +232,31 @@ export function usePeerConnection(): PeerHookReturn {
     voiceCallbackRef.current = cb
   }, [])
 
+  const onChatMessage = useCallback((cb: (text: string) => void) => {
+    chatCallbackRef.current = cb
+  }, [])
+
+  const onAction = useCallback((cb: (action: string, payload?: Record<string, unknown>) => void) => {
+    actionCallbackRef.current = cb
+  }, [])
+
+  const sendChatReply = useCallback((msg: { role: 'user' | 'assistant'; content: string }) => {
+    const conn = connRef.current
+    if (conn?.open) {
+      conn.send({ type: 'chat-reply', ...msg })
+      return
+    }
+    const dst = relayPeerIdRef.current
+    const peer = peerRef.current
+    if (dst && peer && !peer.destroyed) {
+      peer.socket.send({
+        type: 'RELAY',
+        dst,
+        payload: { kind: 'chat-reply', ...msg },
+      })
+    }
+  }, [])
+
   const destroy = useCallback(() => {
     connRef.current?.close()
     peerRef.current?.destroy()
@@ -217,5 +265,5 @@ export function usePeerConnection(): PeerHookReturn {
     setConnected(false)
   }, [])
 
-  return { peerId, connected, sendState, onVoiceText, destroy, error }
+  return { peerId, connected, sendState, onVoiceText, onChatMessage, onAction, sendChatReply, destroy, error }
 }

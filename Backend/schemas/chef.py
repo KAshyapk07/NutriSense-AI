@@ -51,6 +51,7 @@ class VoiceAction(str, Enum):
     PREV = "PREV"
     DONE = "DONE"
     STRIKE = "STRIKE"
+    STRIKE_PREP = "STRIKE_PREP"
     TIMER_START = "TIMER_START"
     TIMER_PAUSE = "TIMER_PAUSE"
     TIMER_RESET = "TIMER_RESET"
@@ -69,6 +70,8 @@ class ChefIntentRequest(BaseModel):
     current_action: str = Field(..., description="Text of the current cooking step")
     timer_running: bool = Field(False, description="Whether the step timer is currently running")
     timer_seconds_left: Optional[int] = Field(None, description="Seconds remaining on the timer, if any")
+    phase: str = Field("cooking", description="Current cooking phase: prep | cooking | done")
+    mise_en_place: List[str] = Field(default_factory=list, description="List of prep task descriptions for fuzzy matching")
 
 
 class ChefIntentResponse(BaseModel):
@@ -79,6 +82,8 @@ class ChefIntentResponse(BaseModel):
     question: Optional[str] = Field(None, description="Question text if action is ASK")
     confidence: float = Field(1.0, ge=0.0, le=1.0, description="Confidence in the parsed intent")
     filtered: bool = Field(False, description="True if the text was filtered out as non-cooking noise")
+    prep_item: Optional[str] = Field(None, description="Matched prep item text for STRIKE_PREP action")
+    display_text: Optional[str] = Field(None, description="Human-readable confirmation message for the UI chat")
 
 
 class CookingSessionState(BaseModel):

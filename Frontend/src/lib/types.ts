@@ -214,6 +214,7 @@ export type VoiceAction =
   | 'PREV'
   | 'DONE'
   | 'STRIKE'
+  | 'STRIKE_PREP'
   | 'TIMER_START'
   | 'TIMER_PAUSE'
   | 'TIMER_RESET'
@@ -229,6 +230,8 @@ export interface ChefIntentRequest {
   current_action: string
   timer_running: boolean
   timer_seconds_left: number | null
+  phase?: string
+  mise_en_place?: string[]
 }
 
 export interface ChefIntentResponse {
@@ -237,6 +240,8 @@ export interface ChefIntentResponse {
   question: string | null
   confidence: number
   filtered: boolean
+  prep_item: string | null
+  display_text: string | null
 }
 
 export interface CookingSessionState {
@@ -252,4 +257,12 @@ export interface CookingSessionState {
   completed_steps: number[]
   phase: 'prep' | 'cooking' | 'done'
   steps_overview: Array<{ id: string; action: string; completed: string }>
+  /** Preparation tasks (sent during prep and cooking phases) */
+  mise_en_place?: Array<{ id: number; text: string; done: boolean }>
+  /** Tools required for the recipe */
+  tools_required?: string[]
+  /** Estimated total cook time in minutes */
+  estimated_total_minutes?: number | null
+  /** Chat messages synced from PC Q&A panel */
+  chat_messages?: Array<{ role: 'user' | 'assistant'; content: string }>
 }

@@ -553,6 +553,11 @@ _COOKING_KEYWORDS = re.compile(
     r"|repeat|again|say that|what|how|why|help|tip|ingredient"
     r"|ready|move on|mark|strike|check|uncheck"
     r"|first|last|step|number|one|two|three|four|five|six|seven|eight|nine|ten"
+    r"|chop|chopped|chopping|cut|cutting|dice|diced|slice|sliced|wash|washed"
+    r"|peel|peeled|soak|soaked|grate|grated|boil|boiled|cook|cooked|fry|fried"
+    r"|mix|mixed|knead|marinate|grind|ground|prep|prepare|prepared"
+    r"|tell|explain|much|long|minute|minutes|min|already|should|can|need"
+    r"|temperature|heat|hot|cold|warm|brown|golden|soft|tender|crispy"
     r")\b",
     re.IGNORECASE,
 )
@@ -571,20 +576,146 @@ def _is_cooking_relevant(text: str) -> bool:
 
 _HEURISTIC_PATTERNS: list[tuple[re.Pattern, VoiceAction]] = [
     (re.compile(r"\b(next\s*(step)?|move\s*on|skip|go\s*ahead)\b", re.I), VoiceAction.NEXT),
-    (re.compile(r"\b(prev(ious)?\s*(step)?|go\s*back|back)\b", re.I), VoiceAction.PREV),
-    (re.compile(r"\b(done|finish(ed)?|complete(d)?|all\s*done)\b", re.I), VoiceAction.DONE),
+    (re.compile(r"\b(prev(ious)?\s*(step)?|go\s*back|back\s*up)\b", re.I), VoiceAction.PREV),
     (re.compile(r"\b(start\s*timer|begin\s*timer|timer\s*start|start\s*the\s*timer)\b", re.I), VoiceAction.TIMER_START),
-    (re.compile(r"\b(stop\s*timer|pause\s*timer|timer\s*(stop|pause)|pause\s*the\s*timer)\b", re.I), VoiceAction.TIMER_PAUSE),
+    (re.compile(r"\b(stop\s*timer|pause\s*timer|timer\s*(stop|pause)|pause\s*the\s*timer|pause)\b", re.I), VoiceAction.TIMER_PAUSE),
     (re.compile(r"\b(reset\s*timer|timer\s*reset|restart\s*timer)\b", re.I), VoiceAction.TIMER_RESET),
     (re.compile(r"\b(repeat|say\s*(that|it)\s*again|read\s*(it|step)\s*(again)?)\b", re.I), VoiceAction.REPEAT),
 ]
 
+# Patterns that indicate a question → route to ASK (not navigation)
+_QUESTION_PATTERNS = re.compile(
+    r"(?:^|\b)(what|how|why|is\s+it|is\s+this|can\s+i|should\s+i|do\s+i|tell\s+me|explain|"
+    r"how\s+long|how\s+much|how\s+many|what\s+if|when\s+will|when\s+should|"
+    r"already\s+(?:done|boiled|cooked|fried|ready|soft|brown|golden|tender)|"
+    r"looks?\s+(?:done|ready|cooked|brown|golden)|"
+    r"too\s+(?:hot|cold|salty|spicy|thick|thin|dry|wet|watery))\b",
+    re.I,
+)
 
-def _try_heuristic(text: str) -> VoiceAction | None:
-    """Attempt to resolve intent via fast regex without calling the LLM."""
+# "done with X" / "finished X" / "X is done" → STRIKE_PREP (not navigation)
+_PREP_DONE_PATTERN = re.compile(
+    r"\b(?:done\s+(?:with\s+)?(?:the\s+|all\s+the\s+)?|"
+    r"finished?\s+(?:the\s+|all\s+the\s+)?|"
+    r"completed?\s+(?:the\s+|all\s+the\s+)?)"
+    r"(\w[\w\s]*)",
+    re.I,
+)
+# "X is done/ready/chopped/prepared/etc."
+_ITEM_DONE_PATTERN = re.compile(
+    r"^(?:the\s+)?(\w[\w\s]*?)\s+(?:is|are)\s+(?:done|ready|chopped|cut|diced|sliced|peeled|"
+    r"washed|soaked|grated|ground|mixed|marinated|prepared|kneaded)\b",
+    re.I,
+)
+
+# Bare "done" pattern — only matches when it's clearly a step completion
+_BARE_DONE_PATTERN = re.compile(
+    r"^(?:i(?:'?m)?\s+)?(?:done|finished|completed?|all\s+done|step\s+done|mark\s+(?:as\s+)?done)$",
+    re.I,
+)
+
+
+def _stem(word: str) -> str:
+    """Naive English suffix stripper for voice-matching (not a full stemmer)."""
+    # Order matters: check longer suffixes first
+    for suffix, repl in (
+        ("pping", "p"), ("tting", "t"), ("nning", "n"),  # doubling: chopping→chop
+        ("pping", "p"), ("dding", "d"),
+        ("ying", "y"),                                    # frying→fry
+        ("ies", "y"),                                     # berries→berry
+        ("ied", "y"),                                     # fried→fry
+        ("ing", ""),                                      # slicing→slic → then 'e' rule below
+        ("ed", ""),                                       # sliced→slic
+        ("es", ""),                                       # potatoes→potato
+        ("s", ""),                                        # carrots→carrot
+    ):
+        if word.endswith(suffix) and len(word) - len(suffix) + len(repl) >= 3:
+            stem = word[: -len(suffix)] + repl
+            # Restore trailing-e for common patterns: slic→slice, dic→dice
+            if stem.endswith(("ic", "ac", "nc", "lc", "rc")):
+                stem += "e"
+            return stem
+    return word
+
+
+def _fuzzy_match_prep(text: str, mise_en_place: list[str]) -> str | None:
+    """Fuzzy-match spoken text against prep item descriptions.
+
+    Returns the matched prep item text, or None.
+    """
+    if not mise_en_place or not text.strip():
+        return None
+
+    text_lower = text.lower().strip()
+    # Extract meaningful words (skip stop words)
+    stop_words = {"the", "a", "an", "all", "some", "is", "are", "was", "with", "and", "or", "to", "of", "for", "i"}
+    text_words = {_stem(w) for w in re.findall(r"\w+", text_lower) if w not in stop_words and len(w) > 2}
+
+    if not text_words:
+        return None
+
+    best_match: str | None = None
+    best_score = 0
+
+    for item in mise_en_place:
+        item_lower = item.lower()
+        item_words = {_stem(w) for w in re.findall(r"\w+", item_lower) if w not in stop_words and len(w) > 2}
+        if not item_words:
+            continue
+
+        # Count overlapping words
+        overlap = text_words & item_words
+        if not overlap:
+            continue
+
+        # Score = overlap / min(text_words, item_words) — favours partial matches
+        score = len(overlap) / min(len(text_words), len(item_words))
+        if score > best_score:
+            best_score = score
+            best_match = item
+
+    # Require at least one meaningful word overlap
+    return best_match if best_score >= 0.3 else None
+
+
+def _try_heuristic(text: str, mise_en_place: list[str] | None = None, phase: str = "cooking") -> tuple[VoiceAction, dict] | None:
+    """Attempt to resolve intent via fast regex without calling the LLM.
+
+    Returns (action, extras_dict) or None.
+    extras_dict may contain: prep_item, question, display_text.
+    """
+    stripped = text.strip()
+
+    # 1) Check if this is a question — route to ASK immediately
+    if _QUESTION_PATTERNS.search(stripped):
+        return (VoiceAction.ASK, {"question": stripped})
+
+    # 2) Check for prep-item completion ("done with chopping", "carrots are chopped")
+    prep_items = mise_en_place or []
+    prep_match = _PREP_DONE_PATTERN.search(stripped)
+    if not prep_match:
+        prep_match = _ITEM_DONE_PATTERN.search(stripped)
+    if prep_match:
+        spoken_item = prep_match.group(1).strip()
+        matched = _fuzzy_match_prep(spoken_item, prep_items)
+        if matched:
+            return (VoiceAction.STRIKE_PREP, {"prep_item": matched, "display_text": f"Marked '{matched}' as done"})
+        # Even without a match, if there's clearly a prep description, still try
+        if prep_items:
+            # Try matching the entire speech against prep items
+            matched = _fuzzy_match_prep(stripped, prep_items)
+            if matched:
+                return (VoiceAction.STRIKE_PREP, {"prep_item": matched, "display_text": f"Marked '{matched}' as done"})
+
+    # 3) Bare "done" / "finished" / "I'm done" — only when no prep-task words follow
+    if _BARE_DONE_PATTERN.match(stripped):
+        return (VoiceAction.DONE, {})
+
+    # 4) Standard navigation / timer heuristics
     for pattern, action in _HEURISTIC_PATTERNS:
-        if pattern.search(text):
-            return action
+        if pattern.search(stripped):
+            return (action, {})
+
     return None
 
 
@@ -599,6 +730,13 @@ def _build_intent_prompt(body: ChefIntentRequest) -> str:
     else:
         timer_ctx = "No timer for this step."
 
+    prep_ctx = ""
+    if body.mise_en_place:
+        items = "\n".join(f"  - {item}" for item in body.mise_en_place)
+        prep_ctx = f"\nPrep tasks (mise en place):\n{items}\n"
+
+    phase_ctx = f"Phase: {body.phase}"
+
     return f"""<SYSTEM>
 You are a kitchen voice-command interpreter. Parse the user's spoken command into exactly one JSON action.
 Respond with ONLY a JSON object — no explanations.
@@ -606,8 +744,10 @@ Respond with ONLY a JSON object — no explanations.
 
 <CONTEXT>
 Dish: {body.recipe_name}
+{phase_ctx}
 Step {body.current_step} of {body.total_steps}: "{body.current_action}"
 {timer_ctx}
+{prep_ctx}
 </CONTEXT>
 
 <USER_SPEECH>
@@ -617,24 +757,29 @@ Step {body.current_step} of {body.total_steps}: "{body.current_action}"
 <ACTIONS>
 - NEXT: go to the next cooking step
 - PREV: go to the previous step
-- DONE: mark current step as finished and advance (same as NEXT but marks completion)
-- STRIKE: mark a specific step as done by number  (requires "step" field, 1-based)
+- DONE: mark current step as finished and advance (same as NEXT but marks completion). Use ONLY for bare "done"/"finished"/"I'm done" without specifying what was done.
+- STRIKE: mark a specific cooking step as done by number (requires "step" field, 1-based integer)
+- STRIKE_PREP: mark a preparation/mise en place task as done (requires "prep_item" field — use EXACT text from the prep tasks list above). Use when the user says things like "done chopping the carrots" or "finished washing the rice".
 - TIMER_START: start/resume the timer for the current step
 - TIMER_PAUSE: pause the timer
 - TIMER_RESET: reset the timer to its original duration
 - REPEAT: read the current step instructions again
-- ASK: the user is asking a cooking question (set "question" field with the question text)
-- NOOP: the speech is unrelated to cooking navigation
+- ASK: the user is asking a cooking question, expressing doubt, or making an observation about the food (set "question" field with the full question text). Use for things like "what should I do next?", "this looks too brown", "timer says 10 but it's already boiled", "how do I know when it's done?", "can I substitute X?", etc.
+- NOOP: the speech is completely unrelated to cooking
 </ACTIONS>
 
 <OUTPUT_FORMAT>
-{{"action": "NEXT", "step": null, "question": null}}
+{{"action": "ASK", "step": null, "question": "The user's question text", "prep_item": null}}
 </OUTPUT_FORMAT>
 
 <RULES>
 - Pick the single most likely action.
-- For ASK, extract the core question into the "question" field.
-- For STRIKE, set "step" to the step number mentioned (1-based integer).
+- For ASK, extract the core question into the "question" field. When the user expresses doubt, concern, or asks about timing/doneness, ALWAYS use ASK.
+- For STRIKE, set "step" to the step number mentioned (1-based integer). "step" must ALWAYS be an integer or null — never a string.
+- For STRIKE_PREP, set "prep_item" to the EXACT text of the matching prep task from the list above. If the user mentions a prep task by description, match it to the closest item.
+- "done with chopping X" or "finished the X" → use STRIKE_PREP if X matches a prep task.
+- "I'm done" / "done" (with no specific task) → use DONE.
+- If the user says something like "timer says X but it's already Y" or "this looks done already", use ASK — they're seeking guidance.
 - If the speech is clearly not a cooking command, return NOOP.
 - Output ONLY the JSON object. No markdown, no text.
 </RULES>"""
@@ -646,9 +791,9 @@ Step {body.current_step} of {body.total_steps}: "{body.current_action}"
 async def chef_intent(body: ChefIntentRequest, nutri_router=Depends(get_router)):
     """Parse raw voice text into a structured cooking intent.
 
-    Two-stage filter:
+    Three-stage filter:
       1. Keyword gate — rejects non-cooking speech without touching the LLM.
-      2. Heuristic patterns — resolves simple commands (next, done, timer) instantly.
+      2. Heuristic patterns — resolves simple commands (next, done, timer, prep items) instantly.
       3. LLM fallback — for ambiguous or complex commands only.
     """
     text = body.raw_text.strip()
@@ -662,14 +807,25 @@ async def chef_intent(body: ChefIntentRequest, nutri_router=Depends(get_router))
             filtered=True,
         )
 
-    # Stage 2: fast heuristic
-    heuristic = _try_heuristic(text)
+    # Stage 2: fast heuristic (now includes prep-item matching and question detection)
+    heuristic = _try_heuristic(text, mise_en_place=body.mise_en_place, phase=body.phase)
     if heuristic is not None:
-        logger.info("Voice heuristic match: %r → %s", text, heuristic.value)
+        action, extras = heuristic
+        logger.info("Voice heuristic match: %r → %s %s", text, action.value, extras)
+
+        # Build display text for chat feedback
+        display = extras.get("display_text")
+        if not display:
+            display = _action_display_text(action, body, extras)
+
         return ChefIntentResponse(
-            action=heuristic,
+            action=action,
+            step=extras.get("step"),
+            question=extras.get("question"),
+            prep_item=extras.get("prep_item"),
             confidence=0.95,
             filtered=False,
+            display_text=display,
         )
 
     # Stage 3: LLM intent parsing
@@ -692,6 +848,7 @@ async def chef_intent(body: ChefIntentRequest, nutri_router=Depends(get_router))
             action=VoiceAction.NOOP,
             confidence=0.3,
             filtered=False,
+            display_text="I didn't understand that. Try 'next step', 'start timer', or ask me a question.",
         )
 
     action_str = str(data.get("action", "NOOP")).upper()
@@ -700,10 +857,74 @@ async def chef_intent(body: ChefIntentRequest, nutri_router=Depends(get_router))
     except ValueError:
         action = VoiceAction.NOOP
 
+    # Safely parse step — must be an integer or None
+    raw_step = data.get("step")
+    step_val: int | None = None
+    if raw_step is not None:
+        try:
+            step_val = int(raw_step)
+        except (ValueError, TypeError):
+            step_val = None
+
+    question = data.get("question")
+    prep_item_raw = data.get("prep_item")
+
+    # For STRIKE_PREP from LLM: validate the prep_item matches an actual item
+    prep_item: str | None = None
+    if action == VoiceAction.STRIKE_PREP and prep_item_raw and body.mise_en_place:
+        # Exact match first
+        if prep_item_raw in body.mise_en_place:
+            prep_item = prep_item_raw
+        else:
+            # Fuzzy match
+            prep_item = _fuzzy_match_prep(prep_item_raw, body.mise_en_place)
+
+    # For ASK, ensure question is populated
+    if action == VoiceAction.ASK and not question:
+        question = text  # use the raw speech as the question
+
+    extras = {"step": step_val, "question": question, "prep_item": prep_item}
+    display = _action_display_text(action, body, extras)
+
     return ChefIntentResponse(
         action=action,
-        step=data.get("step"),
-        question=data.get("question"),
+        step=step_val,
+        question=question,
+        prep_item=prep_item,
         confidence=0.85,
         filtered=False,
+        display_text=display,
     )
+
+
+def _action_display_text(action: VoiceAction, body: ChefIntentRequest, extras: dict) -> str:
+    """Generate a human-friendly confirmation message for the chat panel."""
+    match action:
+        case VoiceAction.NEXT:
+            next_step = min(body.current_step + 1, body.total_steps)
+            return f"Moving to step {next_step}"
+        case VoiceAction.PREV:
+            prev_step = max(body.current_step - 1, 1)
+            return f"Going back to step {prev_step}"
+        case VoiceAction.DONE:
+            return f"Step {body.current_step} complete!"
+        case VoiceAction.STRIKE:
+            s = extras.get("step")
+            return f"Marked step {s} as done" if s else "Marked step as done"
+        case VoiceAction.STRIKE_PREP:
+            p = extras.get("prep_item", "item")
+            return f"Done: {p}"
+        case VoiceAction.TIMER_START:
+            return "Timer started"
+        case VoiceAction.TIMER_PAUSE:
+            return "Timer paused"
+        case VoiceAction.TIMER_RESET:
+            return "Timer reset"
+        case VoiceAction.REPEAT:
+            return f"Step {body.current_step}: {body.current_action}"
+        case VoiceAction.ASK:
+            return ""  # ASK responses come from the chat LLM, not here
+        case VoiceAction.NOOP:
+            return "I didn't understand that. Try 'next step', 'start timer', or ask me a question."
+        case _:
+            return ""

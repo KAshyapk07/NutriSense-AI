@@ -979,20 +979,22 @@ export default function ChefPage() {
   const [showQR, setShowQR] = useState(false)
   const [lastVoiceText, setLastVoiceText] = useState<string | null>(null)
   const processingVoiceRef = useRef(false)
+  const voiceQueueRef = useRef<string[]>([])
+  const lastProcessedVoiceRef = useRef({ text: '', time: 0 })
 
   // -- Build the state snapshot to push to phone --
   const buildSessionState = useCallback((): CookingSessionState | null => {
     if (!chefData) return null
     const step = chefData.steps[stepIndex]
-    if (!step) return null
+    if (!step && phase !== 'prep') return null
     return {
       recipe_name: chefData.recipe_name,
       current_step: stepIndex + 1,
       total_steps: totalSteps,
-      current_action: step.action,
-      current_tool: step.tool ?? null,
-      current_tip: step.tip ?? null,
-      timer_total: step.timer_seconds ?? null,
+      current_action: step?.action ?? 'Preparing ingredients',
+      current_tool: step?.tool ?? null,
+      current_tip: step?.tip ?? null,
+      timer_total: step?.timer_seconds ?? null,
       timer_left: timerState?.timeLeft ?? null,
       timer_running: timerState?.running ?? false,
       completed_steps: Array.from(completedSteps),
@@ -1002,8 +1004,16 @@ export default function ChefPage() {
         action: s.action.length > 60 ? s.action.slice(0, 57) + '...' : s.action,
         completed: completedSteps.has(s.id) ? 'true' : 'false',
       })),
+      mise_en_place: chefData.mise_en_place.map((item) => ({
+        id: item.id,
+        text: item.text,
+        done: prepChecked.has(item.id),
+      })),
+      tools_required: chefData.tools_required,
+      estimated_total_minutes: chefData.estimated_total_minutes,
+      chat_messages: qaMessages.slice(-20),
     }
-  }, [chefData, stepIndex, totalSteps, timerState, completedSteps, phase])
+  }, [chefData, stepIndex, totalSteps, timerState, completedSteps, phase, prepChecked, qaMessages])
 
   // -- Push state to phone whenever it changes --
   useEffect(() => {
@@ -1012,11 +1022,37 @@ export default function ChefPage() {
     if (state) peer.sendState(state)
   }, [peer.connected, buildSessionState, peer.sendState])
 
+  // -- Helper: add a voice interaction to chat (both local + phone) --
+  const addVoiceToChat = useCallback(
+    (userText: string, replyText: string) => {
+      const userMsg: QAMessage = { role: 'user', content: `[Voice] ${userText}` }
+      const assistantMsg: QAMessage = { role: 'assistant', content: replyText }
+      setQaMessages((prev) => [...prev, userMsg, assistantMsg])
+      peer.sendChatReply({ role: 'user', content: `[Voice] ${userText}` })
+      peer.sendChatReply({ role: 'assistant', content: replyText })
+    },
+    [peer],
+  )
+
   // -- Handle incoming voice text from phone --
   const handleVoiceFromPhone = useCallback(
     async (text: string) => {
-      if (processingVoiceRef.current || !chefData) return
+      if (!chefData) return
+
+      // Dedup — skip if identical text was already processed within 3 s
+      const now = Date.now()
+      const prev = lastProcessedVoiceRef.current
+      if (
+        text.trim().toLowerCase() === prev.text.toLowerCase() &&
+        now - prev.time < 3000
+      ) return
+
+      if (processingVoiceRef.current) {
+        voiceQueueRef.current.push(text)
+        return
+      }
       processingVoiceRef.current = true
+      lastProcessedVoiceRef.current = { text: text.trim(), time: now }
       setLastVoiceText(text)
 
       try {
@@ -1028,10 +1064,11 @@ export default function ChefPage() {
           current_action: currentStep?.action ?? 'Preparing ingredients',
           timer_running: timerState?.running ?? false,
           timer_seconds_left: timerState?.timeLeft ?? null,
+          phase,
+          mise_en_place: chefData.mise_en_place.map((item) => item.text),
         })
 
         if (intent.filtered) {
-          // Non-cooking noise — ignore silently
           return
         }
 
@@ -1039,9 +1076,11 @@ export default function ChefPage() {
           case 'NEXT':
           case 'DONE':
             handleStepComplete()
+            addVoiceToChat(text, intent.display_text || `Step ${stepIndex + 1} complete!`)
             break
           case 'PREV':
             handlePrevStep()
+            addVoiceToChat(text, intent.display_text || `Going back to step ${stepIndex}`)
             break
           case 'STRIKE': {
             const targetStep = intent.step
@@ -1055,63 +1094,90 @@ export default function ChefPage() {
                 })
               }
             }
+            addVoiceToChat(text, intent.display_text || `Marked step ${intent.step} as done`)
+            break
+          }
+          case 'STRIKE_PREP': {
+            // Match the prep_item text to a mise_en_place item and toggle it
+            if (intent.prep_item) {
+              const matched = chefData.mise_en_place.find(
+                (item) => item.text === intent.prep_item,
+              )
+              if (matched) {
+                setPrepChecked((prev) => {
+                  const next = new Set(prev)
+                  next.add(matched.id)
+                  return next
+                })
+              }
+            }
+            addVoiceToChat(text, intent.display_text || `Done: ${intent.prep_item || 'Prep item done'}`)
             break
           }
           case 'TIMER_START':
-            // Timer control is handled via timerState — we dispatch a custom event
             window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'start' }))
+            addVoiceToChat(text, intent.display_text || 'Timer started')
             break
           case 'TIMER_PAUSE':
             window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'pause' }))
+            addVoiceToChat(text, intent.display_text || 'Timer paused')
             break
           case 'TIMER_RESET':
             window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'reset' }))
+            addVoiceToChat(text, intent.display_text || 'Timer reset')
             break
           case 'REPEAT':
-            // Push current state again to phone (re-read)
             if (peer.connected) {
               const state = buildSessionState()
               if (state) peer.sendState(state)
             }
+            addVoiceToChat(text, intent.display_text || currentStep?.action || 'Here is the current step.')
             break
-          case 'ASK':
-            if (intent.question) {
-              // Inject the question into the Q&A
-              setQaInput(intent.question)
-              // Auto-submit
-              const userMessage: QAMessage = { role: 'user', content: intent.question }
-              const newMessages = [...qaMessages, userMessage]
-              setQaMessages(newMessages)
-              try {
-                let contextPrefix = ''
-                if (phase === 'prep') {
-                  contextPrefix = `[PREPARATION PHASE - voice command] Recipe: ${chefData.recipe_name}. The user is preparing mise en place before cooking.\n\nUser asks: `
-                } else if (phase === 'cooking' && cookingContext) {
-                  contextPrefix = `[COOKING SESSION - voice command] ${cookingContext}\n\nUser asks: `
-                }
-                const res = await chatWithProduct({
-                  message: `${contextPrefix}${intent.question}`,
-                  context: recipeContext ?? undefined,
-                  history: qaMessages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
-                })
-                setQaMessages([...newMessages, { role: 'assistant', content: res.reply }])
-              } catch {
-                setQaMessages([
-                  ...newMessages,
-                  { role: 'assistant', content: 'Sorry, I could not answer that.' },
-                ])
+          case 'ASK': {
+            // Route the question through the chat LLM
+            const question = intent.question || text
+            const userMessage: QAMessage = { role: 'user', content: `[Voice] ${question}` }
+            const newMessages = [...qaMessages, userMessage]
+            setQaMessages(newMessages)
+            peer.sendChatReply({ role: 'user', content: `[Voice] ${question}` })
+            try {
+              let contextPrefix = ''
+              if (phase === 'prep') {
+                contextPrefix = `[PREPARATION PHASE - voice command] Recipe: ${chefData.recipe_name}. The user is preparing mise en place before cooking.\n\nUser asks: `
+              } else if (phase === 'cooking' && cookingContext) {
+                contextPrefix = `[COOKING SESSION - voice command] ${cookingContext}\n\nUser asks: `
+              } else if (phase === 'done') {
+                contextPrefix = `[COMPLETED cooking "${chefData.recipe_name}"]\n\nUser asks: `
               }
-              setQaInput('')
+              const res = await chatWithProduct({
+                message: `${contextPrefix}${question}`,
+                context: recipeContext ?? undefined,
+                history: qaMessages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+              })
+              setQaMessages([...newMessages, { role: 'assistant', content: res.reply }])
+              peer.sendChatReply({ role: 'assistant', content: res.reply })
+            } catch {
+              const errMsg = 'Sorry, I could not answer that.'
+              setQaMessages([...newMessages, { role: 'assistant', content: errMsg }])
+              peer.sendChatReply({ role: 'assistant', content: errMsg })
             }
             break
+          }
           case 'NOOP':
           default:
+            if (intent.display_text) {
+              addVoiceToChat(text, intent.display_text)
+            }
             break
         }
       } catch (err) {
         console.error('Voice intent processing error:', err)
+        addVoiceToChat(text, 'Something went wrong processing that command. Please try again.')
       } finally {
         processingVoiceRef.current = false
+        // Process next queued voice command if any
+        const next = voiceQueueRef.current.shift()
+        if (next) handleVoiceFromPhone(next)
       }
     },
     [
@@ -1128,6 +1194,7 @@ export default function ChefPage() {
       phase,
       cookingContext,
       recipeContext,
+      addVoiceToChat,
     ],
   )
 
@@ -1135,6 +1202,100 @@ export default function ChefPage() {
   useEffect(() => {
     peer.onVoiceText(handleVoiceFromPhone)
   }, [peer.onVoiceText, handleVoiceFromPhone])
+
+  // Register chat callback — phone user typed a question in chat
+  const handleChatFromPhone = useCallback(
+    async (text: string) => {
+      if (!text.trim() || !chefData) return
+      const msg = text.trim()
+
+      const userMessage: QAMessage = { role: 'user', content: msg }
+      const newMessages = [...qaMessages, userMessage]
+      setQaMessages(newMessages)
+      // Don't echo user message — phone already added it locally
+
+      try {
+        let contextPrefix = ''
+        if (phase === 'cooking' && cookingContext) {
+          contextPrefix = `[COOKING SESSION for "${chefData.recipe_name}"] ${cookingContext}\n\nUser asks: `
+        } else if (phase === 'prep') {
+          contextPrefix = `[PREPARATION PHASE for "${chefData.recipe_name}"]\n\nUser asks: `
+        } else if (phase === 'done') {
+          contextPrefix = `[COMPLETED cooking "${chefData.recipe_name}"]\n\nUser asks: `
+        }
+        const res = await chatWithProduct({
+          message: `${contextPrefix}${msg}`,
+          context: recipeContext ?? undefined,
+          history: qaMessages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+        })
+        setQaMessages([...newMessages, { role: 'assistant', content: res.reply }])
+        peer.sendChatReply({ role: 'assistant', content: res.reply })
+      } catch {
+        const errMsg = 'Sorry, I could not answer that right now.'
+        setQaMessages([...newMessages, { role: 'assistant', content: errMsg }])
+        peer.sendChatReply({ role: 'assistant', content: errMsg })
+      }
+    },
+    [chefData, qaMessages, phase, cookingContext, recipeContext, peer],
+  )
+
+  useEffect(() => {
+    peer.onChatMessage(handleChatFromPhone)
+  }, [peer.onChatMessage, handleChatFromPhone])
+
+  // -- Handle structured actions from phone (prep toggle, navigation, timer) --
+  const handleActionFromPhone = useCallback(
+    (action: string, payload?: Record<string, unknown>) => {
+      if (!chefData) return
+      switch (action) {
+        case 'toggle-prep': {
+          const id = Number(payload?.id)
+          if (!isNaN(id)) {
+            setPrepChecked((prev) => {
+              const next = new Set(prev)
+              next.has(id) ? next.delete(id) : next.add(id)
+              return next
+            })
+          }
+          break
+        }
+        case 'next':
+          if (stepIndex < totalSteps - 1) setStepIndex((i) => i + 1)
+          break
+        case 'prev':
+          handlePrevStep()
+          break
+        case 'done':
+          handleStepComplete()
+          break
+        case 'timer-start':
+          window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'start' }))
+          break
+        case 'timer-pause':
+          window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'pause' }))
+          break
+        case 'timer-reset':
+          window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'reset' }))
+          break
+        case 'repeat':
+          if (peer.connected) {
+            const state = buildSessionState()
+            if (state) peer.sendState(state)
+          }
+          break
+      }
+    },
+    [chefData, stepIndex, totalSteps, handlePrevStep, handleStepComplete, peer, buildSessionState],
+  )
+
+  useEffect(() => {
+    peer.onAction(handleActionFromPhone)
+  }, [peer.onAction, handleActionFromPhone])
+
+  // Auto-close QR modal when phone connects
+  useEffect(() => {
+    if (peer.connected && showQR) setShowQR(false)
+  }, [peer.connected, showQR])
 
   // QR code URL — built from the dynamically resolved remote base URL
   const qrUrl = peer.peerId && remoteBaseUrl ? `${remoteBaseUrl}?peer=${peer.peerId}` : null
