@@ -2,6 +2,38 @@ import type { ProcessResponse, SearchResponse, SearchFilters, ChatRequest, ChatR
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
+// Header that tells ngrok to skip its browser interstitial page.
+// Without this, API fetch() calls through an ngrok tunnel receive an HTML
+// warning page instead of the expected JSON response.
+const COMMON_HEADERS: Record<string, string> = {
+  'ngrok-skip-browser-warning': '1',
+}
+
+// ── App config (exposes PUBLIC_URL set in backend .env) ──────────────────────
+export interface AppConfig {
+  /** Publicly reachable base URL of the server (e.g. ngrok or deployed domain). */
+  remote_base_url: string
+  /** "production" when PUBLIC_URL is set, "local" otherwise. */
+  deployment: 'production' | 'local'
+}
+
+/**
+ * Fetch runtime config from the backend.  Used by the P2P Kitchen Remote
+ * feature to build the correct QR code URL when the app is behind ngrok or
+ * deployed to a public host.
+ *
+ * Falls back gracefully — never throws; returns empty strings on error.
+ */
+export async function getAppConfig(): Promise<AppConfig> {
+  try {
+    const res = await fetch(`${API_BASE}/config`, { headers: COMMON_HEADERS })
+    if (!res.ok) return { remote_base_url: '', deployment: 'local' }
+    return res.json()
+  } catch {
+    return { remote_base_url: '', deployment: 'local' }
+  }
+}
+
 export async function processQuery(
   query?: string,
   image?: File,
@@ -12,6 +44,7 @@ export async function processQuery(
 
   const res = await fetch(`${API_BASE}/process`, {
     method: 'POST',
+    headers: COMMON_HEADERS,
     body: form,
   })
 
@@ -38,7 +71,9 @@ export async function searchQuery(
     for (const a of filters.excludeAllergens) params.append('exclude_allergens', a)
   }
 
-  const res = await fetch(`${API_BASE}/search?${params.toString()}`)
+  const res = await fetch(`${API_BASE}/search?${params.toString()}`, {
+    headers: COMMON_HEADERS,
+  })
 
   if (!res.ok) {
     const text = await res.text()
@@ -51,7 +86,7 @@ export async function searchQuery(
 export async function chatWithProduct(body: ChatRequest): Promise<ChatResponseData> {
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...COMMON_HEADERS, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 
@@ -66,7 +101,7 @@ export async function chatWithProduct(body: ChatRequest): Promise<ChatResponseDa
 export async function chefParse(body: ChefParseRequest): Promise<ChefParseResponse> {
   const res = await fetch(`${API_BASE}/chef/parse`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...COMMON_HEADERS, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 
@@ -81,7 +116,7 @@ export async function chefParse(body: ChefParseRequest): Promise<ChefParseRespon
 export async function chefIntent(body: ChefIntentRequest): Promise<ChefIntentResponse> {
   const res = await fetch(`${API_BASE}/chef/intent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...COMMON_HEADERS, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 

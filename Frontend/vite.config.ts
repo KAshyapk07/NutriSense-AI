@@ -11,6 +11,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true,
     proxy: {
       '/process': {
         target: 'http://localhost:8000',
@@ -31,6 +32,15 @@ export default defineConfig({
       '/chef': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+      },
+      '/config': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/peerjs': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        ws: true,
       },
     },
   },

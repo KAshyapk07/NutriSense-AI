@@ -30,6 +30,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ICE_SERVERS, getSelfHostedPeerConfig } from '@/hooks/use-peer-connection'
 import type { CookingSessionState } from '@/lib/types'
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -95,8 +96,17 @@ export default function ChefRemotePage() {
   const [wakeLockActive, setWakeLockActive] = useState(false)
 
   const connRef = useRef<DataConnection | null>(null)
+  const peerRef = useRef<Peer | null>(null)
+  const hostPeerIdRef = useRef<string | null>(null)
+  const relayActiveRef = useRef(false)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
+
+  // Helper: is any channel (data-channel or relay) usable?
+  const isChannelOpen = useCallback(
+    () => connRef.current?.open || relayActiveRef.current,
+    [],
+  )
 
   // ── Connect to PC via PeerJS ───────────────────────────────────
 
@@ -108,13 +118,35 @@ export default function ChefRemotePage() {
       return
     }
 
-    const peer = new Peer({ debug: 0 })
+    hostPeerIdRef.current = hostPeerId
+
+    const peer = new Peer({
+      ...getSelfHostedPeerConfig(),
+      debug: 1,
+      config: { iceServers: ICE_SERVERS },
+    })
+
+    peerRef.current = peer
+
+    // Safety timeout — increased to 30 s to allow both WebRTC and relay
+    // a fair chance.  Cleared as soon as *either* transport connects.
+    const timeout = setTimeout(() => {
+      if (connRef.current?.open || relayActiveRef.current) return
+      setConnectionStatus('error')
+      setErrorMsg(
+        `Could not reach peer "${hostPeerId}". Make sure ` +
+        'the cooking session is still active on your PC and try scanning the QR code again.',
+      )
+      peer.destroy()
+    }, 30_000)
 
     peer.on('open', () => {
+      // ── 1. Try WebRTC data channel (best-case: direct P2P) ──────
       const conn = peer.connect(hostPeerId, { reliable: true })
       connRef.current = conn
 
       conn.on('open', () => {
+        clearTimeout(timeout)
         setConnectionStatus('connected')
         setErrorMsg(null)
       })
@@ -133,21 +165,54 @@ export default function ChefRemotePage() {
       })
 
       conn.on('close', () => {
-        setConnectionStatus('disconnected')
+        if (!relayActiveRef.current) setConnectionStatus('disconnected')
       })
 
       conn.on('error', (err) => {
-        setConnectionStatus('error')
-        setErrorMsg(err.message)
+        // Suppress if relay is already working
+        if (!relayActiveRef.current) {
+          clearTimeout(timeout)
+          setConnectionStatus('error')
+          setErrorMsg(err.message)
+        }
+      })
+
+      // ── 2. WebSocket relay fallback (always works) ──────────────
+      // The signaling server forwards any message with a `dst` field,
+      // so we send type "RELAY" through the existing PeerJS socket.
+      // This reaches the PC even when WebRTC P2P can't connect
+      // (carrier NAT, expired TURN, WiFi isolation, etc.).
+      peer.socket.on('message', (msg: Record<string, unknown>) => {
+        if (msg.type !== 'RELAY' || typeof msg.payload !== 'object' || !msg.payload) return
+        const payload = msg.payload as Record<string, unknown>
+
+        if (payload.kind === 'ack') {
+          // PC acknowledged our relay-init → relay channel is live
+          relayActiveRef.current = true
+          clearTimeout(timeout)
+          setConnectionStatus('connected')
+          setErrorMsg(null)
+        } else if (payload.kind === 'state' && payload.data) {
+          setSessionState(payload.data as CookingSessionState)
+        }
+      })
+
+      // Immediately announce ourselves to the PC over the signaling socket.
+      peer.socket.send({
+        type: 'RELAY',
+        dst: hostPeerId,
+        payload: { kind: 'init' },
       })
     })
 
     peer.on('error', (err) => {
+      clearTimeout(timeout)
       setConnectionStatus('error')
       setErrorMsg(`Connection failed: ${err.message}`)
     })
 
     return () => {
+      clearTimeout(timeout)
       peer.destroy()
     }
   }, [])
@@ -197,10 +262,27 @@ export default function ChefRemotePage() {
 
   const sendVoiceText = useCallback(
     (text: string) => {
+      if (!text.trim()) return
+      const trimmed = text.trim()
+
+      // Prefer WebRTC data channel
       const conn = connRef.current
-      if (conn?.open && text.trim()) {
-        conn.send({ type: 'voice', text: text.trim() })
-        setLastSent(text.trim())
+      if (conn?.open) {
+        conn.send({ type: 'voice', text: trimmed })
+        setLastSent(trimmed)
+        return
+      }
+
+      // Fall back to signaling-socket relay
+      const peer = peerRef.current
+      const hostId = hostPeerIdRef.current
+      if (relayActiveRef.current && peer && !peer.destroyed && hostId) {
+        peer.socket.send({
+          type: 'RELAY',
+          dst: hostId,
+          payload: { kind: 'voice', text: trimmed },
+        })
+        setLastSent(trimmed)
       }
     },
     [],
@@ -252,8 +334,8 @@ export default function ChefRemotePage() {
 
     recognition.onend = () => {
       setListening(false)
-      // Auto-restart if still connected
-      if (connRef.current?.open) {
+      // Auto-restart if still connected (via data channel or relay)
+      if (connRef.current?.open || relayActiveRef.current) {
         try {
           recognition.start()
         } catch {

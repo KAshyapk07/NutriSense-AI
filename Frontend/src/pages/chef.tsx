@@ -47,7 +47,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
-import { searchQuery, chefParse, chatWithProduct, chefIntent } from '@/lib/api'
+import { searchQuery, chefParse, chatWithProduct, chefIntent, getAppConfig } from '@/lib/api'
 import { usePeerConnection } from '@/hooks/use-peer-connection'
 import type {
   ChefParseResponse,
@@ -945,8 +945,35 @@ export default function ChefPage() {
   //  P2P Kitchen Remote (WebRTC via PeerJS)
   // ═══════════════════════════════════════════════════════════════════
 
-  const REMOTE_BASE_URL =
-    import.meta.env.VITE_REMOTE_URL ?? `${window.location.origin}/chef-remote`
+  // Priority order for the remote URL that goes into the QR code:
+  //  1. VITE_REMOTE_URL  — set in frontend/.env.local for local ngrok testing
+  //                        or baked in at build time for production deploys.
+  //  2. GET /config      — backend returns PUBLIC_URL from its .env; useful
+  //                        when you want to update the ngrok URL without a
+  //                        Vite rebuild (just restart FastAPI with new env).
+  //  3. window.location.origin — automatic fallback for plain localhost dev.
+  //
+  // To swap to a different tunnel provider (Cloudflare Tunnel, localtunnel,
+  // Vercel, Render, etc.) simply change the value of PUBLIC_URL in the
+  // backend .env (or VITE_REMOTE_URL in the frontend .env.local).
+  const [remoteBaseUrl, setRemoteBaseUrl] = useState<string>(
+    import.meta.env.VITE_REMOTE_URL ?? ''
+  )
+
+  useEffect(() => {
+    // Skip the network round-trip if the URL is already baked in via Vite env.
+    if (remoteBaseUrl) return
+    getAppConfig()
+      .then((cfg) => {
+        setRemoteBaseUrl(
+          cfg.remote_base_url
+            ? `${cfg.remote_base_url.replace(/\/$/, '')}/chef-remote`
+            : `${window.location.origin}/chef-remote`
+        )
+      })
+      .catch(() => setRemoteBaseUrl(`${window.location.origin}/chef-remote`))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const peer = usePeerConnection()
   const [showQR, setShowQR] = useState(false)
@@ -1109,8 +1136,8 @@ export default function ChefPage() {
     peer.onVoiceText(handleVoiceFromPhone)
   }, [peer.onVoiceText, handleVoiceFromPhone])
 
-  // QR code URL
-  const qrUrl = peer.peerId ? `${REMOTE_BASE_URL}?peer=${peer.peerId}` : null
+  // QR code URL — built from the dynamically resolved remote base URL
+  const qrUrl = peer.peerId && remoteBaseUrl ? `${remoteBaseUrl}?peer=${peer.peerId}` : null
 
   // -- Render ----------------------------------------------------------------
 
