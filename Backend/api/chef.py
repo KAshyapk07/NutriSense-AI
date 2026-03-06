@@ -596,21 +596,23 @@ _QUESTION_PATTERNS = re.compile(
 # "done with X" / "finished X" / "X is done" → STRIKE_PREP (not navigation)
 _PREP_DONE_PATTERN = re.compile(
     r"\b(?:done\s+(?:with\s+)?(?:the\s+|all\s+the\s+)?|"
-    r"finished?\s+(?:the\s+|all\s+the\s+)?|"
-    r"completed?\s+(?:the\s+|all\s+the\s+)?)"
+    r"finished?\s+(?:with\s+)?(?:the\s+|all\s+the\s+)?|"
+    r"completed?\s+(?:with\s+)?(?:the\s+|all\s+the\s+)?|"
+    r"(?:i(?:'?ve|'?m)?\s+)?(?:already\s+)?(?:done|finished|completed)\s+(?:the\s+)?)"
     r"(\w[\w\s]*)",
     re.I,
 )
 # "X is done/ready/chopped/prepared/etc."
 _ITEM_DONE_PATTERN = re.compile(
     r"^(?:the\s+)?(\w[\w\s]*?)\s+(?:is|are)\s+(?:done|ready|chopped|cut|diced|sliced|peeled|"
-    r"washed|soaked|grated|ground|mixed|marinated|prepared|kneaded)\b",
+    r"washed|soaked|grated|ground|mixed|marinated|prepared|kneaded|boiled|fried|cooked|"
+    r"steamed|roasted|baked|grilled|ground|blended|mashed|cleaned)\b",
     re.I,
 )
 
 # Bare "done" pattern — only matches when it's clearly a step completion
 _BARE_DONE_PATTERN = re.compile(
-    r"^(?:i(?:'?m)?\s+)?(?:done|finished|completed?|all\s+done|step\s+done|mark\s+(?:as\s+)?done)$",
+    r"^(?:i(?:'?m)?\s+)?(?:done|finished|completed?|all\s+done|step\s+done|mark\s+(?:as\s+)?done|that'?s?\s+done)$",
     re.I,
 )
 
@@ -648,8 +650,8 @@ def _fuzzy_match_prep(text: str, mise_en_place: list[str]) -> str | None:
 
     text_lower = text.lower().strip()
     # Extract meaningful words (skip stop words)
-    stop_words = {"the", "a", "an", "all", "some", "is", "are", "was", "with", "and", "or", "to", "of", "for", "i"}
-    text_words = {_stem(w) for w in re.findall(r"\w+", text_lower) if w not in stop_words and len(w) > 2}
+    stop_words = {"the", "a", "an", "all", "some", "is", "are", "was", "with", "and", "or", "to", "of", "for", "i", "in", "it", "its", "my", "this", "that", "do", "did", "has", "have", "had", "be", "been", "so", "but", "if", "on", "at", "by", "up"}
+    text_words = {_stem(w) for w in re.findall(r"\w+", text_lower) if w not in stop_words and len(w) > 1}
 
     if not text_words:
         return None
@@ -659,7 +661,7 @@ def _fuzzy_match_prep(text: str, mise_en_place: list[str]) -> str | None:
 
     for item in mise_en_place:
         item_lower = item.lower()
-        item_words = {_stem(w) for w in re.findall(r"\w+", item_lower) if w not in stop_words and len(w) > 2}
+        item_words = {_stem(w) for w in re.findall(r"\w+", item_lower) if w not in stop_words and len(w) > 1}
         if not item_words:
             continue
 
@@ -678,11 +680,48 @@ def _fuzzy_match_prep(text: str, mise_en_place: list[str]) -> str | None:
     return best_match if best_score >= 0.3 else None
 
 
-def _try_heuristic(text: str, mise_en_place: list[str] | None = None, phase: str = "cooking") -> tuple[VoiceAction, dict] | None:
+def _fuzzy_match_step(text: str, steps: list[str]) -> int | None:
+    """Fuzzy-match spoken text against cooking step action descriptions.
+
+    Returns the 1-based step number of the best match, or None.
+    ``steps`` is expected to be a list of action strings (index 0 = step 1).
+    """
+    if not steps or not text.strip():
+        return None
+
+    text_lower = text.lower().strip()
+    stop_words = {"the", "a", "an", "all", "some", "is", "are", "was", "with", "and", "or", "to", "of", "for", "i", "in", "it", "its", "my", "this", "that", "do", "did", "has", "have", "had", "be", "been", "so", "but", "if", "on", "at", "by", "up", "done", "finished", "completed"}
+    text_words = {_stem(w) for w in re.findall(r"\w+", text_lower) if w not in stop_words and len(w) > 1}
+
+    if not text_words:
+        return None
+
+    best_idx: int | None = None
+    best_score = 0.0
+
+    for i, action in enumerate(steps):
+        action_lower = action.lower()
+        action_words = {_stem(w) for w in re.findall(r"\w+", action_lower) if w not in stop_words and len(w) > 1}
+        if not action_words:
+            continue
+
+        overlap = text_words & action_words
+        if not overlap:
+            continue
+
+        score = len(overlap) / min(len(text_words), len(action_words))
+        if score > best_score:
+            best_score = score
+            best_idx = i
+
+    return (best_idx + 1) if best_idx is not None and best_score >= 0.35 else None
+
+
+def _try_heuristic(text: str, mise_en_place: list[str] | None = None, phase: str = "cooking", steps: list[str] | None = None) -> tuple[VoiceAction, dict] | None:
     """Attempt to resolve intent via fast regex without calling the LLM.
 
     Returns (action, extras_dict) or None.
-    extras_dict may contain: prep_item, question, display_text.
+    extras_dict may contain: prep_item, question, display_text, step.
     """
     stripped = text.strip()
 
@@ -692,20 +731,30 @@ def _try_heuristic(text: str, mise_en_place: list[str] | None = None, phase: str
 
     # 2) Check for prep-item completion ("done with chopping", "carrots are chopped")
     prep_items = mise_en_place or []
+    step_actions = steps or []
+
     prep_match = _PREP_DONE_PATTERN.search(stripped)
     if not prep_match:
         prep_match = _ITEM_DONE_PATTERN.search(stripped)
     if prep_match:
         spoken_item = prep_match.group(1).strip()
+        # Try prep items first
         matched = _fuzzy_match_prep(spoken_item, prep_items)
         if matched:
             return (VoiceAction.STRIKE_PREP, {"prep_item": matched, "display_text": f"Marked '{matched}' as done"})
+        # Try cooking steps
+        step_num = _fuzzy_match_step(spoken_item, step_actions)
+        if step_num:
+            return (VoiceAction.STRIKE, {"step": step_num, "display_text": f"Marked step {step_num} as done"})
         # Even without a match, if there's clearly a prep description, still try
         if prep_items:
-            # Try matching the entire speech against prep items
             matched = _fuzzy_match_prep(stripped, prep_items)
             if matched:
                 return (VoiceAction.STRIKE_PREP, {"prep_item": matched, "display_text": f"Marked '{matched}' as done"})
+        if step_actions:
+            step_num = _fuzzy_match_step(stripped, step_actions)
+            if step_num:
+                return (VoiceAction.STRIKE, {"step": step_num, "display_text": f"Marked step {step_num} as done"})
 
     # 3) Bare "done" / "finished" / "I'm done" — only when no prep-task words follow
     if _BARE_DONE_PATTERN.match(stripped):
@@ -715,6 +764,17 @@ def _try_heuristic(text: str, mise_en_place: list[str] | None = None, phase: str
     for pattern, action in _HEURISTIC_PATTERNS:
         if pattern.search(stripped):
             return (action, {})
+
+    # 5) Catch-all: user states a prep/step description without "done with" phrasing
+    #    e.g. "grind the carrot pieces" or "wash the carrots" — likely reporting completion
+    if prep_items:
+        matched = _fuzzy_match_prep(stripped, prep_items)
+        if matched:
+            return (VoiceAction.STRIKE_PREP, {"prep_item": matched, "display_text": f"Marked '{matched}' as done"})
+    if step_actions:
+        step_num = _fuzzy_match_step(stripped, step_actions)
+        if step_num:
+            return (VoiceAction.STRIKE, {"step": step_num, "display_text": f"Marked step {step_num} as done"})
 
     return None
 
@@ -769,7 +829,7 @@ Step {body.current_step} of {body.total_steps}: "{body.current_action}"
 </ACTIONS>
 
 <OUTPUT_FORMAT>
-{{"action": "ASK", "step": null, "question": "The user's question text", "prep_item": null}}
+{{"action": "NEXT", "step": null, "question": null, "prep_item": null}}
 </OUTPUT_FORMAT>
 
 <RULES>

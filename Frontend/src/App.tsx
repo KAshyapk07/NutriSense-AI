@@ -9,6 +9,7 @@ import ModifyPage from './pages/modify'
 import HealthySwapsPage from './pages/healthy-swaps'
 import ChefPage from './pages/chef'
 import ChefRemotePage from './pages/chef-remote'
+import KitchenPage from './pages/kitchen'
 import Profile from './pages/profile'
 import Settings from './pages/settings'
 import { Sidebar } from './components/layout/sidebar'
@@ -30,6 +31,7 @@ function App() {
         <Route path="/healthy-swaps" element={<HealthySwapsPage />} />
         <Route path="/chef" element={<ChefPage />} />
         <Route path="/chef-remote" element={<ChefRemotePage />} />
+        <Route path="/kitchen" element={<KitchenPage />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>

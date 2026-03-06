@@ -8,7 +8,12 @@
  * 3. LLM structures instructions into Prep + Cook Steps.
  * 4. Step-by-step cook mode with per-step countdown timers.
  * 5. Context-aware Q&A chat panel that knows the current cooking stage.
- * 6. P2P phone remote: QR → WebRTC → voice commands from kitchen.
+ * 6. Phone remote: QR → WebSocket → voice commands from kitchen.
+ *
+ * Voice Architecture:
+ *   Phone (MediaRecorder) → WebSocket → Backend (STT + Intent Pipeline)
+ *   Backend relays parsed intents to the PC host, which executes them.
+ *   No PeerJS, no WebRTC, no client-side SpeechRecognition.
  */
 import {
   useState,
@@ -47,9 +52,10 @@ import {
 import { QRCodeSVG } from 'qrcode.react'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
-import { searchQuery, chefParse, chatWithProduct, chefIntent, getAppConfig } from '@/lib/api'
-import { usePeerConnection } from '@/hooks/use-peer-connection'
+import { searchQuery, chefParse, chatWithProduct, getAppConfig } from '@/lib/api'
+import { useHostWebSocket } from '@/hooks/use-host-websocket'
 import type {
+  ChefIntentResponse,
   ChefParseResponse,
   CookStep,
   CookingSessionState,
@@ -432,7 +438,7 @@ function StepTimer({
     onStateChange?.({ running, timeLeft, total: seconds })
   }, [running, timeLeft, seconds, onStateChange])
 
-  // Listen for voice-driven timer commands from the P2P pipeline
+  // Listen for voice-driven timer commands from the remote pipeline
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<string>).detail
@@ -940,28 +946,15 @@ export default function ChefPage() {
     launchedRef.current = false
     submittingRef.current = false
   }, [])
-
   // ═══════════════════════════════════════════════════════════════════
-  //  P2P Kitchen Remote (WebRTC via PeerJS)
+  //  Kitchen Remote (WebSocket host connection)
   // ═══════════════════════════════════════════════════════════════════
 
-  // Priority order for the remote URL that goes into the QR code:
-  //  1. VITE_REMOTE_URL  — set in frontend/.env.local for local ngrok testing
-  //                        or baked in at build time for production deploys.
-  //  2. GET /config      — backend returns PUBLIC_URL from its .env; useful
-  //                        when you want to update the ngrok URL without a
-  //                        Vite rebuild (just restart FastAPI with new env).
-  //  3. window.location.origin — automatic fallback for plain localhost dev.
-  //
-  // To swap to a different tunnel provider (Cloudflare Tunnel, localtunnel,
-  // Vercel, Render, etc.) simply change the value of PUBLIC_URL in the
-  // backend .env (or VITE_REMOTE_URL in the frontend .env.local).
   const [remoteBaseUrl, setRemoteBaseUrl] = useState<string>(
     import.meta.env.VITE_REMOTE_URL ?? ''
   )
 
   useEffect(() => {
-    // Skip the network round-trip if the URL is already baked in via Vite env.
     if (remoteBaseUrl) return
     getAppConfig()
       .then((cfg) => {
@@ -975,12 +968,9 @@ export default function ChefPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const peer = usePeerConnection()
+  const host = useHostWebSocket()
   const [showQR, setShowQR] = useState(false)
   const [lastVoiceText, setLastVoiceText] = useState<string | null>(null)
-  const processingVoiceRef = useRef(false)
-  const voiceQueueRef = useRef<string[]>([])
-  const lastProcessedVoiceRef = useRef({ text: '', time: 0 })
 
   // -- Build the state snapshot to push to phone --
   const buildSessionState = useCallback((): CookingSessionState | null => {
@@ -1017,10 +1007,10 @@ export default function ChefPage() {
 
   // -- Push state to phone whenever it changes --
   useEffect(() => {
-    if (!peer.connected) return
+    if (!host.phoneConnected) return
     const state = buildSessionState()
-    if (state) peer.sendState(state)
-  }, [peer.connected, buildSessionState, peer.sendState])
+    if (state) host.sendState(state)
+  }, [host.phoneConnected, buildSessionState, host.sendState])
 
   // -- Helper: add a voice interaction to chat (both local + phone) --
   const addVoiceToChat = useCallback(
@@ -1028,180 +1018,149 @@ export default function ChefPage() {
       const userMsg: QAMessage = { role: 'user', content: `[Voice] ${userText}` }
       const assistantMsg: QAMessage = { role: 'assistant', content: replyText }
       setQaMessages((prev) => [...prev, userMsg, assistantMsg])
-      peer.sendChatReply({ role: 'user', content: `[Voice] ${userText}` })
-      peer.sendChatReply({ role: 'assistant', content: replyText })
+      host.sendChatReply({ role: 'user', content: `[Voice] ${userText}` })
+      host.sendChatReply({ role: 'assistant', content: replyText })
     },
-    [peer],
+    [host],
   )
 
-  // -- Handle incoming voice text from phone --
-  const handleVoiceFromPhone = useCallback(
-    async (text: string) => {
+  // Handle voice intents pre-processed by the backend (STT + intent pipeline).
+  // The backend handles speech-to-text, deduplication via VAD, and the 3-stage
+  // intent pipeline — the host just receives the parsed intent and executes it.
+  const handleVoiceIntentFromPhone = useCallback(
+    async (intent: ChefIntentResponse & { raw_text?: string }) => {
       if (!chefData) return
+      if (intent.filtered) return
 
-      // Dedup — skip if identical text was already processed within 3 s
-      const now = Date.now()
-      const prev = lastProcessedVoiceRef.current
-      if (
-        text.trim().toLowerCase() === prev.text.toLowerCase() &&
-        now - prev.time < 3000
-      ) return
+      const voiceText = intent.raw_text || intent.display_text || ''
+      if (voiceText) setLastVoiceText(voiceText)
 
-      if (processingVoiceRef.current) {
-        voiceQueueRef.current.push(text)
-        return
-      }
-      processingVoiceRef.current = true
-      lastProcessedVoiceRef.current = { text: text.trim(), time: now }
-      setLastVoiceText(text)
-
-      try {
-        const intent = await chefIntent({
-          raw_text: text,
-          recipe_name: chefData.recipe_name,
-          current_step: currentStep ? stepIndex + 1 : 1,
-          total_steps: totalSteps,
-          current_action: currentStep?.action ?? 'Preparing ingredients',
-          timer_running: timerState?.running ?? false,
-          timer_seconds_left: timerState?.timeLeft ?? null,
-          phase,
-          mise_en_place: chefData.mise_en_place.map((item) => item.text),
-        })
-
-        if (intent.filtered) {
-          return
-        }
-
-        switch (intent.action) {
-          case 'NEXT':
-          case 'DONE':
-            handleStepComplete()
-            addVoiceToChat(text, intent.display_text || `Step ${stepIndex + 1} complete!`)
-            break
-          case 'PREV':
-            handlePrevStep()
-            addVoiceToChat(text, intent.display_text || `Going back to step ${stepIndex}`)
-            break
-          case 'STRIKE': {
-            const targetStep = intent.step
-            if (targetStep && targetStep >= 1 && targetStep <= totalSteps) {
-              const targetId = chefData.steps[targetStep - 1]?.id
-              if (targetId) {
-                setCompletedSteps((prev) => {
-                  const next = new Set(prev)
-                  next.add(targetId)
-                  return next
-                })
-              }
-            }
-            addVoiceToChat(text, intent.display_text || `Marked step ${intent.step} as done`)
-            break
+      switch (intent.action) {
+        case 'NEXT':
+        case 'DONE':
+          handleStepComplete()
+          if (intent.display_text && !intent.display_text.includes('Step complete')) {
+            addVoiceToChat(voiceText, intent.display_text)
           }
-          case 'STRIKE_PREP': {
-            // Match the prep_item text to a mise_en_place item and toggle it
-            if (intent.prep_item) {
-              const matched = chefData.mise_en_place.find(
-                (item) => item.text === intent.prep_item,
-              )
-              if (matched) {
-                setPrepChecked((prev) => {
-                  const next = new Set(prev)
-                  next.add(matched.id)
-                  return next
-                })
-              }
-            }
-            addVoiceToChat(text, intent.display_text || `Done: ${intent.prep_item || 'Prep item done'}`)
-            break
+          break
+
+        case 'PREV':
+          handlePrevStep()
+          if (intent.display_text) {
+            addVoiceToChat(voiceText, intent.display_text)
           }
-          case 'TIMER_START':
-            window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'start' }))
-            addVoiceToChat(text, intent.display_text || 'Timer started')
-            break
-          case 'TIMER_PAUSE':
-            window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'pause' }))
-            addVoiceToChat(text, intent.display_text || 'Timer paused')
-            break
-          case 'TIMER_RESET':
-            window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'reset' }))
-            addVoiceToChat(text, intent.display_text || 'Timer reset')
-            break
-          case 'REPEAT':
-            if (peer.connected) {
-              const state = buildSessionState()
-              if (state) peer.sendState(state)
-            }
-            addVoiceToChat(text, intent.display_text || currentStep?.action || 'Here is the current step.')
-            break
-          case 'ASK': {
-            // Route the question through the chat LLM
-            const question = intent.question || text
-            const userMessage: QAMessage = { role: 'user', content: `[Voice] ${question}` }
-            const newMessages = [...qaMessages, userMessage]
-            setQaMessages(newMessages)
-            peer.sendChatReply({ role: 'user', content: `[Voice] ${question}` })
-            try {
-              let contextPrefix = ''
-              if (phase === 'prep') {
-                contextPrefix = `[PREPARATION PHASE - voice command] Recipe: ${chefData.recipe_name}. The user is preparing mise en place before cooking.\n\nUser asks: `
-              } else if (phase === 'cooking' && cookingContext) {
-                contextPrefix = `[COOKING SESSION - voice command] ${cookingContext}\n\nUser asks: `
-              } else if (phase === 'done') {
-                contextPrefix = `[COMPLETED cooking "${chefData.recipe_name}"]\n\nUser asks: `
-              }
-              const res = await chatWithProduct({
-                message: `${contextPrefix}${question}`,
-                context: recipeContext ?? undefined,
-                history: qaMessages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+          break
+
+        case 'STRIKE': {
+          const targetStep = intent.step
+          if (targetStep && targetStep >= 1 && targetStep <= totalSteps) {
+            const targetId = chefData.steps[targetStep - 1]?.id
+            if (targetId) {
+              setCompletedSteps((prev) => {
+                const next = new Set(prev)
+                next.add(targetId)
+                return next
               })
-              setQaMessages([...newMessages, { role: 'assistant', content: res.reply }])
-              peer.sendChatReply({ role: 'assistant', content: res.reply })
-            } catch {
-              const errMsg = 'Sorry, I could not answer that.'
-              setQaMessages([...newMessages, { role: 'assistant', content: errMsg }])
-              peer.sendChatReply({ role: 'assistant', content: errMsg })
+              if (intent.display_text) {
+                addVoiceToChat(voiceText, intent.display_text)
+              }
             }
-            break
           }
-          case 'NOOP':
-          default:
-            if (intent.display_text) {
-              addVoiceToChat(text, intent.display_text)
-            }
-            break
+          break
         }
-      } catch (err) {
-        console.error('Voice intent processing error:', err)
-        addVoiceToChat(text, 'Something went wrong processing that command. Please try again.')
-      } finally {
-        processingVoiceRef.current = false
-        // Process next queued voice command if any
-        const next = voiceQueueRef.current.shift()
-        if (next) handleVoiceFromPhone(next)
+
+        case 'STRIKE_PREP': {
+          if (intent.prep_item) {
+            const matched = chefData.mise_en_place.find(
+              (item) => item.text === intent.prep_item,
+            )
+            if (matched) {
+              setPrepChecked((prev) => {
+                const next = new Set(prev)
+                next.add(matched.id)
+                return next
+              })
+              if (intent.display_text) {
+                addVoiceToChat(voiceText, intent.display_text)
+              }
+            }
+          }
+          break
+        }
+
+        case 'TIMER_START':
+          window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'start' }))
+          break
+
+        case 'TIMER_PAUSE':
+          window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'pause' }))
+          break
+
+        case 'TIMER_RESET':
+          window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'reset' }))
+          break
+
+        case 'REPEAT': {
+          const state = buildSessionState()
+          if (state) host.sendState(state)
+          break
+        }
+
+        case 'ASK': {
+          const question = intent.question || voiceText
+          const userMessage: QAMessage = { role: 'user', content: `[Voice] ${question}` }
+          const newMessages = [...qaMessages, userMessage]
+          setQaMessages(newMessages)
+          host.sendChatReply({ role: 'user', content: `[Voice] ${question}` })
+
+          try {
+            let contextPrefix = ''
+            if (phase === 'prep') {
+              contextPrefix = `[PREPARATION PHASE - voice command] Recipe: ${chefData.recipe_name}. The user is preparing mise en place before cooking.\n\nUser asks: `
+            } else if (phase === 'cooking' && cookingContext) {
+              contextPrefix = `[COOKING SESSION - voice command] ${cookingContext}\n\nUser asks: `
+            } else if (phase === 'done') {
+              contextPrefix = `[COMPLETED cooking "${chefData.recipe_name}"]\n\nUser asks: `
+            }
+            const res = await chatWithProduct({
+              message: `${contextPrefix}${question}`,
+              context: recipeContext ?? undefined,
+              history: qaMessages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+            })
+            setQaMessages([...newMessages, { role: 'assistant', content: res.reply }])
+            host.sendChatReply({ role: 'assistant', content: res.reply })
+          } catch {
+            const errMsg = 'Sorry, I could not answer that.'
+            setQaMessages([...newMessages, { role: 'assistant', content: errMsg }])
+            host.sendChatReply({ role: 'assistant', content: errMsg })
+          }
+          break
+        }
+
+        case 'NOOP':
+        default:
+          break
       }
     },
     [
       chefData,
-      currentStep,
-      stepIndex,
       totalSteps,
-      timerState,
       handleStepComplete,
       handlePrevStep,
-      peer,
       buildSessionState,
       qaMessages,
       phase,
       cookingContext,
       recipeContext,
       addVoiceToChat,
+      host,
     ],
   )
 
-  // Register voice callback
+  // Register voice intent callback
   useEffect(() => {
-    peer.onVoiceText(handleVoiceFromPhone)
-  }, [peer.onVoiceText, handleVoiceFromPhone])
+    host.onVoiceIntent(handleVoiceIntentFromPhone)
+  }, [host.onVoiceIntent, handleVoiceIntentFromPhone])
 
   // Register chat callback — phone user typed a question in chat
   const handleChatFromPhone = useCallback(
@@ -1212,7 +1171,6 @@ export default function ChefPage() {
       const userMessage: QAMessage = { role: 'user', content: msg }
       const newMessages = [...qaMessages, userMessage]
       setQaMessages(newMessages)
-      // Don't echo user message — phone already added it locally
 
       try {
         let contextPrefix = ''
@@ -1229,19 +1187,19 @@ export default function ChefPage() {
           history: qaMessages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
         })
         setQaMessages([...newMessages, { role: 'assistant', content: res.reply }])
-        peer.sendChatReply({ role: 'assistant', content: res.reply })
+        host.sendChatReply({ role: 'assistant', content: res.reply })
       } catch {
         const errMsg = 'Sorry, I could not answer that right now.'
         setQaMessages([...newMessages, { role: 'assistant', content: errMsg }])
-        peer.sendChatReply({ role: 'assistant', content: errMsg })
+        host.sendChatReply({ role: 'assistant', content: errMsg })
       }
     },
-    [chefData, qaMessages, phase, cookingContext, recipeContext, peer],
+    [chefData, qaMessages, phase, cookingContext, recipeContext, host],
   )
 
   useEffect(() => {
-    peer.onChatMessage(handleChatFromPhone)
-  }, [peer.onChatMessage, handleChatFromPhone])
+    host.onPhoneChat(handleChatFromPhone)
+  }, [host.onPhoneChat, handleChatFromPhone])
 
   // -- Handle structured actions from phone (prep toggle, navigation, timer) --
   const handleActionFromPhone = useCallback(
@@ -1277,28 +1235,27 @@ export default function ChefPage() {
         case 'timer-reset':
           window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'reset' }))
           break
-        case 'repeat':
-          if (peer.connected) {
-            const state = buildSessionState()
-            if (state) peer.sendState(state)
-          }
+        case 'repeat': {
+          const state = buildSessionState()
+          if (state) host.sendState(state)
           break
+        }
       }
     },
-    [chefData, stepIndex, totalSteps, handlePrevStep, handleStepComplete, peer, buildSessionState],
+    [chefData, stepIndex, totalSteps, handlePrevStep, handleStepComplete, host, buildSessionState],
   )
 
   useEffect(() => {
-    peer.onAction(handleActionFromPhone)
-  }, [peer.onAction, handleActionFromPhone])
+    host.onPhoneAction(handleActionFromPhone)
+  }, [host.onPhoneAction, handleActionFromPhone])
 
   // Auto-close QR modal when phone connects
   useEffect(() => {
-    if (peer.connected && showQR) setShowQR(false)
-  }, [peer.connected, showQR])
+    if (host.phoneConnected && showQR) setShowQR(false)
+  }, [host.phoneConnected, showQR])
 
-  // QR code URL — built from the dynamically resolved remote base URL
-  const qrUrl = peer.peerId && remoteBaseUrl ? `${remoteBaseUrl}?peer=${peer.peerId}` : null
+  // QR code URL — session-based (no PeerJS broker)
+  const qrUrl = host.sessionId && remoteBaseUrl ? `${remoteBaseUrl}?session=${host.sessionId}` : null
 
   // -- Render ----------------------------------------------------------------
 
@@ -1628,7 +1585,7 @@ export default function ChefPage() {
                         <QRCodeSVG value={qrUrl} size={160} level="M" includeMargin={false} />
                       </div>
 
-                      {peer.connected ? (
+                      {host.phoneConnected ? (
                         <div className="flex items-center gap-2 text-xs font-medium text-green-600 dark:text-green-400">
                           <Wifi size={14} />
                           Phone connected
@@ -1648,21 +1605,21 @@ export default function ChefPage() {
                         <p>1. Scan QR with phone camera</p>
                         <p>2. Open link in browser</p>
                         <p>3. Tap mic &amp; speak commands</p>
-                        <p className="mt-1 opacity-60">Direct P2P — no cloud</p>
+                        <p className="mt-1 opacity-60">Secure WebSocket — no cloud relay</p>
                       </div>
                     </>
                   ) : (
                     <div className="flex flex-col items-center gap-2 py-4">
                       <div className="w-6 h-6 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
-                      <p className="text-xs text-[var(--color-muted)]">Setting up P2P...</p>
-                      {peer.error && (
-                        <p className="text-[10px] text-red-500">{peer.error}</p>
+                      <p className="text-xs text-[var(--color-muted)]">Setting up connection...</p>
+                      {host.errorMsg && (
+                        <p className="text-[10px] text-red-500">{host.errorMsg}</p>
                       )}
                     </div>
                   )}
 
                   {/* Voice indicator */}
-                  {lastVoiceText && peer.connected && (
+                  {lastVoiceText && host.phoneConnected && (
                     <div className="w-full rounded-xl bg-[var(--color-bg)] border border-[var(--color-border)] p-2.5 flex items-start gap-2">
                       <Mic size={13} className="text-[var(--color-accent)] flex-shrink-0 mt-0.5" />
                       <p className="text-xs text-[var(--color-muted)] italic leading-relaxed">
@@ -1716,13 +1673,13 @@ export default function ChefPage() {
                       onClick={() => setShowQR(true)}
                       className={cn(
                         'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all',
-                        peer.connected
+                        host.phoneConnected
                           ? 'border-green-400/50 bg-green-50 dark:bg-green-900/15 text-green-700 dark:text-green-400'
                           : 'border-[var(--color-border)] hover:border-[var(--color-accent)] text-[var(--color-muted)]',
                       )}
-                      title={peer.connected ? 'Phone connected' : 'Connect phone as kitchen remote'}
+                      title={host.phoneConnected ? 'Phone connected' : 'Connect phone as kitchen remote'}
                     >
-                      {peer.connected ? (
+                      {host.phoneConnected ? (
                         <>
                           <Wifi size={13} className="text-green-500" />
                           Phone connected
@@ -1746,7 +1703,7 @@ export default function ChefPage() {
                 </div>
 
                 {/* Voice command indicator */}
-                {peer.connected && lastVoiceText && (
+                {host.phoneConnected && lastVoiceText && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/15 border border-blue-200/50 dark:border-blue-800/40 text-xs">
                     <Mic size={13} className="text-blue-500 flex-shrink-0" />
                     <span className="text-blue-700 dark:text-blue-300 truncate">
@@ -2000,7 +1957,7 @@ export default function ChefPage() {
                     />
                   </div>
 
-                  {peer.connected ? (
+                  {host.phoneConnected ? (
                     <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
                       <Wifi size={16} />
                       Phone connected — voice commands active
@@ -2023,7 +1980,7 @@ export default function ChefPage() {
                     <p>2. Open the link in your phone browser</p>
                     <p>3. Tap the microphone and speak commands</p>
                     <p className="text-[10px] mt-2">
-                      Direct P2P connection — no data goes to the cloud
+                      Secure WebSocket — no data goes to the cloud
                     </p>
                   </div>
                 </div>
@@ -2031,10 +1988,10 @@ export default function ChefPage() {
                 <div className="flex flex-col items-center gap-3 py-6">
                   <div className="w-8 h-8 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin" />
                   <p className="text-sm text-[var(--color-muted)]">
-                    Setting up P2P connection...
+                    Setting up connection...
                   </p>
-                  {peer.error && (
-                    <p className="text-xs text-red-500">{peer.error}</p>
+                  {host.errorMsg && (
+                    <p className="text-xs text-red-500">{host.errorMsg}</p>
                   )}
                 </div>
               )}
@@ -2103,7 +2060,7 @@ function ChatPanel({
             </div>
           ))}
           {loading && (
-            <div className="mr-auto rounded-xl px-3.5 py-2.5 text-sm bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)]">
+            <div className="mr-auto rounded-xl px-3.5 py-2.5 bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] text-sm">
               <span className="inline-flex gap-1">
                 <span className="animate-pulse">.</span>
                 <span className="animate-pulse" style={{ animationDelay: '0.2s' }}>.</span>

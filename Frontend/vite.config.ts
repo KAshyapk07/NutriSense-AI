@@ -37,10 +37,14 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
-      '/peerjs': {
+      '/ws': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         ws: true,
+      },
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
       },
     },
   },

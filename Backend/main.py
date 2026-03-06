@@ -13,7 +13,8 @@ from Backend.api import chef as chef_api
 from Backend.api import health as health_api
 from Backend.api import process as process_api
 from Backend.api import search as search_api
-from Backend.api import signaling as signaling_api
+from Backend.api import voice_stream as voice_stream_api
+from Backend.api import kitchen as kitchen_api
 from Backend.core.config import settings
 from Backend.core.lifespan import lifespan
 
@@ -48,7 +49,8 @@ app.include_router(health_api.router)
 app.include_router(search_api.router)
 app.include_router(chat_api.router)
 app.include_router(chef_api.router)
-app.include_router(signaling_api.router)
+app.include_router(voice_stream_api.router)
+app.include_router(kitchen_api.router)
 
 
 # Exception handlers
