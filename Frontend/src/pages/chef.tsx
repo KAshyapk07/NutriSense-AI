@@ -976,7 +976,7 @@ export default function ChefPage() {
   const buildSessionState = useCallback((): CookingSessionState | null => {
     if (!chefData) return null
     const step = chefData.steps[stepIndex]
-    if (!step && phase !== 'prep') return null
+    if (!step && phase !== 'prep' && phase !== 'done') return null
     return {
       recipe_name: chefData.recipe_name,
       current_step: stepIndex + 1,
@@ -1005,12 +1005,12 @@ export default function ChefPage() {
     }
   }, [chefData, stepIndex, totalSteps, timerState, completedSteps, phase, prepChecked, qaMessages])
 
-  // -- Push state to phone whenever it changes --
+  // -- Push state to phone whenever it changes or when WS reconnects --
   useEffect(() => {
-    if (!host.phoneConnected) return
+    if (!host.phoneConnected || !host.wsConnected) return
     const state = buildSessionState()
     if (state) host.sendState(state)
-  }, [host.phoneConnected, buildSessionState, host.sendState])
+  }, [host.phoneConnected, host.wsConnected, buildSessionState, host.sendState])
 
   // -- Helper: add a voice interaction to chat (both local + phone) --
   const addVoiceToChat = useCallback(
@@ -1100,6 +1100,13 @@ export default function ChefPage() {
           window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'reset' }))
           break
 
+        case 'START_COOKING':
+          if (canStartCooking) {
+            setPhase('cooking')
+            addVoiceToChat(voiceText, 'Starting cooking!')
+          }
+          break
+
         case 'REPEAT': {
           const state = buildSessionState()
           if (state) host.sendState(state)
@@ -1154,6 +1161,8 @@ export default function ChefPage() {
       recipeContext,
       addVoiceToChat,
       host,
+      canStartCooking,
+      setPhase,
     ],
   )
 
@@ -1235,6 +1244,9 @@ export default function ChefPage() {
         case 'timer-reset':
           window.dispatchEvent(new CustomEvent('chef-timer-control', { detail: 'reset' }))
           break
+        case 'start-cooking':
+          if (canStartCooking) setPhase('cooking')
+          break
         case 'repeat': {
           const state = buildSessionState()
           if (state) host.sendState(state)
@@ -1242,7 +1254,7 @@ export default function ChefPage() {
         }
       }
     },
-    [chefData, stepIndex, totalSteps, handlePrevStep, handleStepComplete, host, buildSessionState],
+    [chefData, stepIndex, totalSteps, handlePrevStep, handleStepComplete, host, buildSessionState, canStartCooking, setPhase],
   )
 
   useEffect(() => {

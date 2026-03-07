@@ -823,11 +823,24 @@ async def chef_voice_websocket(websocket: WebSocket, session_id: str) -> None:
                         {"type": "state", "payload": init_data["state"]},
                     )
 
-            # Notify the phone that the host arrived
+            # Notify the phone that the host arrived, and tell the host
+            # the phone is already present (handles host reconnect / phone-first
+            # join order).
             phone_ws = _registry.get_phone(session_id)
             if phone_ws:
                 await _safe_send_json(
                     phone_ws, {"type": "peer-joined", "role": "host"}
+                )
+                # Push any cached state to the phone now that the host is back
+                cached = _registry.get_state(session_id)
+                if cached and "state" not in init_data:
+                    await _safe_send_json(
+                        phone_ws, {"type": "state", "payload": cached}
+                    )
+                # Tell the host that the phone is already in the session so it
+                # immediately sets phoneConnected=true and pushes fresh state.
+                await _safe_send_json(
+                    websocket, {"type": "peer-joined", "role": "phone"}
                 )
 
         await _safe_send_json(

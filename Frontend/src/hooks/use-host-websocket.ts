@@ -2,7 +2,7 @@
  * useHostWebSocket — WebSocket connection for the PC (host) side of the
  * AI Chef Kitchen Remote.
  *
- * Connects to `/ws/chef-voice/{sessionId}` as the "host" role.
+ * Connects to `/ws/kitchen/{sessionId}`.
  * Receives voice intents, phone button actions, and chat messages relayed
  * by the FastAPI backend.  Pushes CookingSessionState updates to the phone
  * through the same channel.
@@ -12,7 +12,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import type { CookingSessionState, ChefIntentResponse } from '@/lib/types'
+import type { CookingSessionState, ChefIntentResponse, ChefParseResponse } from '@/lib/types'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -33,6 +33,8 @@ export interface UseHostWebSocketReturn {
   sendState: (state: CookingSessionState) => void
   /** Send a chat reply message to the phone. */
   sendChatReply: (msg: { role: 'user' | 'assistant'; content: string }) => void
+  /** Create or replace the server-side cooking session from parsed recipe data. */
+  initSession: (data: ChefParseResponse) => void
   /** Register callback for voice intents processed by the backend. */
   onVoiceIntent: (cb: (intent: ChefIntentResponse & { raw_text?: string }) => void) => void
   /** Register callback for structured button actions from the phone. */
@@ -99,11 +101,16 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
         break
 
       case 'peer-joined':
-        if (data.role === 'phone') setPhoneConnected(true)
+        setPhoneConnected(true)
         break
 
       case 'peer-left':
-        if (data.role === 'phone') setPhoneConnected(false)
+        setPhoneConnected(false)
+        break
+
+      case 'intent':
+        // Backend kitchen.py sends 'intent' after processing voice audio
+        voiceIntentCbRef.current?.(data as unknown as ChefIntentResponse & { raw_text?: string })
         break
 
       case 'voice-intent':
@@ -126,10 +133,22 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
         )
         break
 
+      case 'action-feedback':
+        // Brief feedback from touch actions — show in chat if desired
+        break
+
       case 'chat':
         if (typeof data.text === 'string') {
           phoneChatCbRef.current?.(data.text)
         }
+        break
+
+      case 'chat-reply':
+        // Chat answers processed by the server (voice Q&A)
+        break
+
+      case 'state':
+        // Server-side state update — can be consumed if needed
         break
 
       case 'error':
@@ -158,6 +177,13 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
   const sendChatReply = useCallback(
     (msg: { role: 'user' | 'assistant'; content: string }) => {
       sendJson({ type: 'chat-reply', ...msg })
+    },
+    [sendJson],
+  )
+
+  const initSession = useCallback(
+    (data: ChefParseResponse) => {
+      sendJson({ type: 'init-session', data })
     },
     [sendJson],
   )
@@ -203,12 +229,12 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
       reconnectAttemptRef.current = 0
       hasConnectedRef.current = true
 
-      // Init handshake — identify as host and push cached state
-      const init: Record<string, unknown> = { type: 'init', role: 'host' }
+      // Send the init handshake so the backend knows our role
+      const initPayload: Record<string, unknown> = { type: 'init', role: 'host' }
       if (latestStateRef.current) {
-        init.state = latestStateRef.current
+        initPayload.state = latestStateRef.current
       }
-      ws.send(JSON.stringify(init))
+      ws.send(JSON.stringify(initPayload))
     }
 
     ws.onmessage = (event: MessageEvent) => {
@@ -222,6 +248,9 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
 
     ws.onclose = () => {
       setWsConnected(false)
+      // Reset phone presence so peer-joined from the reconnected session
+      // re-triggers the state-push effect in chef.tsx.
+      setPhoneConnected(false)
       if (!closedIntentionallyRef.current) {
         scheduleReconnect()
       }
@@ -289,6 +318,7 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
     errorMsg,
     sendState,
     sendChatReply,
+    initSession,
     onVoiceIntent,
     onPhoneAction,
     onPhoneChat,

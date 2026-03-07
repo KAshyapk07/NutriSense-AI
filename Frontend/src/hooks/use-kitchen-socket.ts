@@ -1,17 +1,5 @@
-/**
- * useKitchenSocket — Standalone kitchen WebSocket hook.
- *
- * Connects to /ws/kitchen/{sessionId} on the backend.  Unlike the relay-based
- * use-audio-websocket (phone ↔ backend ↔ PC), this is fully self-contained:
- *
- *   Phone ↔ Backend (owns state, does STT, runs intents, answers Q&A)
- *
- * The phone sends parsed recipe data once, then the backend manages the full
- * cooking session.  Audio is streamed → backend transcribes + parses intents
- * → executes against session state → pushes updated state back.
- */
-
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { MicVAD } from '@ricky0123/vad-web'
 import type { CookingSessionState, ChefIntentResponse, ChefParseResponse } from '@/lib/types'
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -59,8 +47,7 @@ export function useKitchenSocket(sessionId: string): UseKitchenSocketReturn {
   const [error, setError] = useState<string | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
-  const recorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
+  const vadRef = useRef<MicVAD | null>(null)
   const reconnectRef = useRef(0)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closedRef = useRef(false)
@@ -223,9 +210,11 @@ export function useKitchenSocket(sessionId: string): UseKitchenSocketReturn {
         if (ws.readyState < WebSocket.CLOSING) ws.close(1000)
         wsRef.current = null
       }
-      streamRef.current?.getTracks().forEach(t => t.stop())
-      streamRef.current = null
-      recorderRef.current = null
+      if (vadRef.current) {
+        vadRef.current.pause()
+        vadRef.current.destroy()
+        vadRef.current = null
+      }
     }
   }, [connect])
 
@@ -233,38 +222,32 @@ export function useKitchenSocket(sessionId: string): UseKitchenSocketReturn {
 
   const startRecording = useCallback(async () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-    if (recorderRef.current?.state === 'recording') return
+    if (vadRef.current) return
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: false,
+      const vad = await MicVAD.new({
+        model: 'legacy',
+        baseAssetPath: '/',
+        onnxWASMBasePath: '/',
+        positiveSpeechThreshold: 0.5,
+        negativeSpeechThreshold: 0.35,
+        minSpeechFrames: 3,
+        preSpeechPadFrames: 10,
+        onSpeechStart: () => {
+          setListening(true)
+          setError(null)
+        },
+        onSpeechEnd: (audio: Float32Array) => {
+          const ws = wsRef.current
+          if (!ws || ws.readyState !== WebSocket.OPEN) return
+          ws.send(_encodeWAV(audio, 16000))
+          ws.send(JSON.stringify({ type: 'speech_end' }))
+          setListening(false)
+        },
+        onVADMisfire: () => setListening(false),
       })
-      streamRef.current = stream
-
-      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : ''
-
-      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {})
-
-      recorder.ondataavailable = (e: BlobEvent) => {
-        if (e.data.size > 0 && wsRef.current?.readyState === WebSocket.OPEN) {
-          e.data.arrayBuffer().then(buf => wsRef.current?.send(buf))
-        }
-      }
-
-      recorder.onstart = () => { setListening(true); setError(null) }
-      recorder.onstop = () => setListening(false)
-      recorder.onerror = () => {
-        setListening(false)
-        setError('Microphone error. Try toggling the mic.')
-      }
-
-      recorderRef.current = recorder
-      recorder.start(250) // 250ms chunks
+      vadRef.current = vad
+      vad.start()
     } catch (err) {
       const e = err as DOMException
       if (e.name === 'NotAllowedError') {
@@ -279,14 +262,14 @@ export function useKitchenSocket(sessionId: string): UseKitchenSocketReturn {
   }, [])
 
   const stopRecording = useCallback(() => {
-    if (recorderRef.current?.state !== 'inactive') recorderRef.current?.stop()
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
-    recorderRef.current = null
-    sendJson({ type: 'stop-recording' })
+    if (vadRef.current) {
+      vadRef.current.pause()
+      vadRef.current.destroy()
+      vadRef.current = null
+    }
     setListening(false)
     setTranscript('')
-  }, [sendJson])
+  }, [])
 
   return {
     status,
@@ -303,4 +286,34 @@ export function useKitchenSocket(sessionId: string): UseKitchenSocketReturn {
     sendChat,
     requestState,
   }
+}
+
+function _encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  const dataLen = samples.length * 2
+  const buffer = new ArrayBuffer(44 + dataLen)
+  const view = new DataView(buffer)
+  _writeStr(view, 0, 'RIFF')
+  view.setUint32(4, 36 + dataLen, true)
+  _writeStr(view, 8, 'WAVE')
+  _writeStr(view, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)   // PCM
+  view.setUint16(22, 1, true)   // mono
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  _writeStr(view, 36, 'data')
+  view.setUint32(40, dataLen, true)
+  let offset = 44
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+    offset += 2
+  }
+  return buffer
+}
+
+function _writeStr(view: DataView, offset: number, str: string): void {
+  for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i))
 }

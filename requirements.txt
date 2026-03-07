@@ -30,7 +30,7 @@ requests>=2.31.0
 # Structured LLM output validation
 pydantic>=2.0.0
 
-# Voice streaming STT (Phase 5.5 — WebSocket audio pipeline)
+# Speech-to-text (local, no API key needed)
 faster-whisper>=1.0.0
 
 # Testing

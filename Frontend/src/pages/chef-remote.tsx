@@ -38,6 +38,7 @@ import {
   RotateCcw,
   CookingPot,
   ListChecks,
+  Flame,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAudioWebSocket } from '@/hooks/use-audio-websocket'

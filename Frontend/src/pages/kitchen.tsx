@@ -133,8 +133,10 @@ export default function KitchenPage() {
 
   // -- Auto-scroll chat --
   useEffect(() => {
-    chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [chatMessages])
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
+    }
+  }, [chatMessages, chatLoading])
 
   // ── Search ────────────────────────────────────────────────────────
 

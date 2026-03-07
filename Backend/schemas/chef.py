@@ -58,6 +58,7 @@ class VoiceAction(str, Enum):
     REPEAT = "REPEAT"
     ASK = "ASK"
     NOOP = "NOOP"
+    START_COOKING = "START_COOKING"
 
 
 class ChefIntentRequest(BaseModel):

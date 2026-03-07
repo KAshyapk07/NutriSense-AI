@@ -1,31 +1,13 @@
-"""
-Standalone Kitchen WebSocket — phone-only cooking assistant.
-
-Unlike the relay-based voice_stream.py (phone ↔ backend ↔ PC host), this
-endpoint is fully self-contained.  The backend owns the cooking session state
-and executes voice intents directly — no PC needed.
-
-Flow:
-    Phone opens /kitchen → searches recipe → backend parses it → phone sends
-    parsed data via WebSocket → backend stores session state → phone streams
-    audio → backend STT + intent → backend mutates state → phone receives
-    updated state.
-
-    Q&A ("why do we do this?") is answered directly by the LLM on the backend.
-
-WebSocket endpoint:  /ws/kitchen/{session_id}
-REST endpoints:      None (reuses existing /search, /chef/parse, /chat)
-"""
-
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
+import os
 import time
-from typing import Any, Optional
+from typing import Any
 
-import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from Backend.schemas.chef import (
@@ -224,7 +206,7 @@ class CookingSession:
             ],
             "tools_required": self.tools_required,
             "estimated_total_minutes": self.estimated_total_minutes,
-            "chat_messages": self.chat_messages[-20:],  # Keep last 20
+            "chat_messages": self.chat_messages[-20:],
         }
 
 
@@ -234,8 +216,6 @@ class CookingSession:
 
 
 class _KitchenStore:
-    """In-memory store for active cooking sessions."""
-
     def __init__(self) -> None:
         self._sessions: dict[str, CookingSession] = {}
         self._lock = asyncio.Lock()
@@ -258,23 +238,65 @@ _store = _KitchenStore()
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  Audio / STT / VAD — reuse from voice_stream
+#  Whisper STT
 # ══════════════════════════════════════════════════════════════════════
 
-from Backend.api.voice_stream import (  # noqa: E402
-    VoiceActivityDetector,
-    WebmAccumulator,
-    transcribe_audio,
+# Loaded once on first use; all subsequent calls reuse the same instance.
+_whisper_model: Any = None
+
+# Culinary initial prompt — biases Whisper toward cooking vocabulary.
+_CULINARY_PROMPT = (
+    "Cooking voice commands: next step, previous step, start timer, pause timer, "
+    "reset timer, done, start cooking, how long, mise en place, sauté, deglaze, "
+    "simmer, ghee, paneer, masala, tadka, dal, roux, julienne, blanch."
 )
 
+# Phrases that Whisper commonly hallucinates on silence/kitchen noise.
+_WHISPER_HALLUCINATIONS = {
+    "", ".", "thank you.", "thanks.", "you", "bye.", "thanks for watching.",
+    "thank you for watching.", "i'm going to go.", "goodbye.",
+}
+
+
+def _get_whisper():
+    global _whisper_model
+    if _whisper_model is None:
+        from faster_whisper import WhisperModel
+        model_size = os.getenv("WHISPER_MODEL", "base")
+        device = os.getenv("WHISPER_DEVICE", "cpu")
+        compute = os.getenv("WHISPER_COMPUTE", "int8")
+        logger.info("Loading faster-whisper model=%s device=%s compute=%s", model_size, device, compute)
+        _whisper_model = WhisperModel(model_size, device=device, compute_type=compute)
+        logger.info("Whisper model ready.")
+    return _whisper_model
+
+
+def _transcribe_wav(wav_bytes: bytes) -> str:
+    """Transcribe a complete WAV buffer synchronously.  Called via asyncio.to_thread."""
+    if not wav_bytes:
+        return ""
+    model = _get_whisper()
+    segments, _ = model.transcribe(
+        io.BytesIO(wav_bytes),
+        language="en",
+        beam_size=1,
+        best_of=1,
+        condition_on_previous_text=False,
+        initial_prompt=_CULINARY_PROMPT,
+    )
+    text = " ".join(seg.text.strip() for seg in segments).strip()
+    if text.lower().rstrip(".") in _WHISPER_HALLUCINATIONS:
+        return ""
+    return text
+
 
 # ══════════════════════════════════════════════════════════════════════
-#  Intent Processing — reuse from chef.py
+# ══════════════════════════════════════════════════════════════════════
+#  Intent Processing
 # ══════════════════════════════════════════════════════════════════════
 
 
 async def _process_intent(text: str, session: CookingSession) -> dict[str, Any]:
-    """Run text through the 3-stage intent pipeline and return the result."""
     from Backend.api.chef import (
         _action_display_text,
         _build_intent_prompt,
@@ -364,19 +386,14 @@ async def _process_intent(text: str, session: CookingSession) -> dict[str, Any]:
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  Execute Intent → Mutate Session State
+#  Execute Intent → Mutate Session
 # ══════════════════════════════════════════════════════════════════════
 
 
 async def _execute_intent(
     intent: dict[str, Any],
     session: CookingSession,
-    raw_text: str,
 ) -> str | None:
-    """Execute a parsed intent against the session and return a feedback message.
-
-    Returns None for ASK (handled separately via LLM chat).
-    """
     action = intent.get("action", "NOOP")
 
     if action == "NEXT":
@@ -385,6 +402,8 @@ async def _execute_intent(
         return session.prev_step()
     elif action == "DONE":
         return session.mark_done()
+    elif action == "START_COOKING":
+        return session.start_cooking()
     elif action == "STRIKE":
         step_num = intent.get("step")
         if step_num:
@@ -405,17 +424,16 @@ async def _execute_intent(
         step = session.get_current_step_info()
         return f"Step {session.current_step}: {step.get('action', '')}"
     elif action == "ASK":
-        return None  # Handled separately
+        return None
     return None
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  LLM Chat Q&A — Direct (no relay)
+#  LLM Q&A
 # ══════════════════════════════════════════════════════════════════════
 
 
 async def _answer_question(question: str, session: CookingSession) -> str:
-    """Answer a cooking question using the LLM, grounded in session context."""
     from Backend.dependencies.router import get_router
 
     step = session.get_current_step_info()
@@ -471,20 +489,12 @@ async def _send_state(ws: WebSocket, session: CookingSession) -> None:
     await _safe_send(ws, {"type": "state", "payload": session.snapshot()})
 
 
-async def _handle_utterance(
+async def _dispatch_transcript(
     ws: WebSocket,
     session: CookingSession,
-    audio_data: bytes,
+    text: str,
 ) -> None:
-    """Full pipeline: transcribe → intent → execute → respond."""
-    logger.info("Kitchen utterance: %d bytes", len(audio_data))
-    text = await transcribe_audio(audio_data)
-    if not text:
-        return
-
-    logger.info("Kitchen transcribed: %r", text)
-
-    # Send transcript
+    logger.info("Kitchen transcript: %r", text)
     await _safe_send(ws, {"type": "transcript", "text": text, "final": True})
 
     # Process intent
@@ -516,12 +526,9 @@ async def _handle_utterance(
         })
         return
 
-    # Execute the intent (mutates session state)
-    feedback = await _execute_intent(intent, session, text)
+    feedback = await _execute_intent(intent, session)
     intent["display_text"] = feedback or intent.get("display_text", "")
     await _safe_send(ws, {"type": "intent", **intent})
-
-    # Send updated state
     await _send_state(ws, session)
 
 
@@ -532,138 +539,103 @@ async def _handle_utterance(
 
 @router.websocket("/ws/kitchen/{session_id}")
 async def kitchen_websocket(websocket: WebSocket, session_id: str) -> None:
-    """Standalone kitchen WebSocket — no PC host required.
-
-    Protocol (Client → Server):
-        ``init-session``   JSON   Parsed recipe data to start a cooking session.
-        ``action``         JSON   Touch-based action (next/prev/done/timer-*/toggle-prep/start-cooking).
-        ``chat``           JSON   Typed chat question.
-        Binary             bytes  Raw WebM/Opus audio chunks (250ms).
-        ``stop-recording`` JSON   Flush pending audio buffer.
-
-    Protocol (Server → Client):
-        ``connected``      Connection acknowledged.
-        ``state``          Full CookingSessionState snapshot.
-        ``transcript``     Live STT transcript.
-        ``intent``         Parsed voice intent with feedback.
-        ``chat-reply``     Q&A answer from LLM.
-        ``error``          Error message.
-    """
     await websocket.accept()
 
-    vad = VoiceActivityDetector()
-    audio_buffer = WebmAccumulator()
     session: CookingSession | None = None
+    # Holds the latest raw WAV bytes from onSpeechEnd — cleared after transcription.
+    pending_audio: bytes | None = None
 
     try:
-        await _safe_send(websocket, {
-            "type": "connected", "session_id": session_id,
-        })
+        await _safe_send(websocket, {"type": "connected", "session_id": session_id})
 
         while True:
             message = await websocket.receive()
 
-            ws_type = message.get("type", "")
-            if ws_type == "websocket.disconnect":
+            if message.get("type") == "websocket.disconnect":
                 break
 
-            # ── Binary: audio chunk ─────────────────────────────────
+            # ── Binary: complete WAV utterance from Silero VAD ──────────
             if "bytes" in message and message["bytes"]:
-                if session is None:
-                    continue  # No session yet, ignore audio
+                pending_audio = bytes(message["bytes"])
+                continue
 
-                chunk = message["bytes"]
-                audio_buffer.extend(chunk)
+            # ── Text: JSON control messages ─────────────────────────
+            if "text" not in message or not message["text"]:
+                continue
 
-                if vad.feed_chunk(chunk):
-                    utterance = audio_buffer.flush()
-                    asyncio.create_task(
-                        _handle_utterance(websocket, session, utterance)
-                    )
+            try:
+                data = json.loads(message["text"])
+            except (json.JSONDecodeError, TypeError):
+                continue
 
-            # ── Text: JSON control ──────────────────────────────────
-            elif "text" in message and message["text"]:
-                try:
-                    data = json.loads(message["text"])
-                except (json.JSONDecodeError, TypeError):
-                    continue
+            msg_type = data.get("type")
 
-                msg_type = data.get("type")
+            if msg_type == "init-session":
+                recipe_data = data.get("data", {})
+                session = await _store.create(session_id, recipe_data)
+                logger.info(
+                    "Kitchen session created: %s (%d steps, %d prep)",
+                    session.recipe_name,
+                    len(session.steps),
+                    len(session.mise_en_place),
+                )
+                await _send_state(websocket, session)
 
-                if msg_type == "init-session":
-                    # Phone sends parsed recipe data → create session
-                    recipe_data = data.get("data", {})
-                    session = await _store.create(session_id, recipe_data)
-                    logger.info(
-                        "Kitchen session created: %s (%d steps, %d prep)",
-                        session.recipe_name,
-                        len(session.steps),
-                        len(session.mise_en_place),
-                    )
-                    await _send_state(websocket, session)
+            elif msg_type == "speech_end" and session:
+                audio = pending_audio
+                pending_audio = None
+                if audio:
+                    text = await asyncio.to_thread(_transcribe_wav, audio)
+                    if text:
+                        logger.info("Whisper transcript: %r", text)
+                        await _dispatch_transcript(websocket, session, text)
 
-                elif msg_type == "action" and session:
-                    action = data.get("action", "")
-                    feedback = ""
+            elif msg_type == "action" and session:
+                action_name = data.get("action", "")
+                feedback = ""
 
-                    if action == "next":
-                        feedback = session.next_step()
-                    elif action == "prev":
-                        feedback = session.prev_step()
-                    elif action == "done":
-                        feedback = session.mark_done()
-                    elif action == "timer-start":
-                        feedback = session.timer_start()
-                    elif action == "timer-pause":
-                        feedback = session.timer_pause()
-                    elif action == "timer-reset":
-                        feedback = session.timer_reset()
-                    elif action == "toggle-prep":
-                        prep_id = data.get("id")
-                        if prep_id is not None:
-                            feedback = session.toggle_prep(int(prep_id))
-                    elif action == "start-cooking":
-                        feedback = session.start_cooking()
+                if action_name == "next":
+                    feedback = session.next_step()
+                elif action_name == "prev":
+                    feedback = session.prev_step()
+                elif action_name == "done":
+                    feedback = session.mark_done()
+                elif action_name == "timer-start":
+                    feedback = session.timer_start()
+                elif action_name == "timer-pause":
+                    feedback = session.timer_pause()
+                elif action_name == "timer-reset":
+                    feedback = session.timer_reset()
+                elif action_name == "toggle-prep":
+                    prep_id = data.get("id")
+                    if prep_id is not None:
+                        feedback = session.toggle_prep(int(prep_id))
+                elif action_name == "start-cooking":
+                    feedback = session.start_cooking()
 
-                    if feedback:
-                        await _safe_send(websocket, {
-                            "type": "action-feedback", "text": feedback,
-                        })
-                    await _send_state(websocket, session)
+                if feedback:
+                    await _safe_send(websocket, {"type": "action-feedback", "text": feedback})
+                await _send_state(websocket, session)
 
-                elif msg_type == "chat" and session:
-                    question = data.get("text", "").strip()
-                    if question:
-                        session.chat_messages.append({"role": "user", "content": question})
-                        await _safe_send(websocket, {
-                            "type": "chat-reply", "role": "user", "content": question,
-                        })
-                        answer = await _answer_question(question, session)
-                        session.chat_messages.append({"role": "assistant", "content": answer})
-                        await _safe_send(websocket, {
-                            "type": "chat-reply", "role": "assistant", "content": answer,
-                        })
+            elif msg_type == "chat" and session:
+                question = data.get("text", "").strip()
+                if question:
+                    session.chat_messages.append({"role": "user", "content": question})
+                    await _safe_send(websocket, {
+                        "type": "chat-reply", "role": "user", "content": question,
+                    })
+                    answer = await _answer_question(question, session)
+                    session.chat_messages.append({"role": "assistant", "content": answer})
+                    await _safe_send(websocket, {
+                        "type": "chat-reply", "role": "assistant", "content": answer,
+                    })
 
-                elif msg_type == "stop-recording":
-                    if session and vad.force_flush() and audio_buffer:
-                        utterance = audio_buffer.flush()
-                        asyncio.create_task(
-                            _handle_utterance(websocket, session, utterance)
-                        )
-                    vad.reset()
-                    audio_buffer.reset()  # New recording = new WebM header
-
-                elif msg_type == "get-state" and session:
-                    await _send_state(websocket, session)
+            elif msg_type == "get-state" and session:
+                await _send_state(websocket, session)
 
     except WebSocketDisconnect:
         logger.info("Kitchen WS disconnected: %s", session_id)
     except Exception as exc:
-        logger.exception("Kitchen WS error: %s: %s", session_id, exc)
+        logger.exception("Kitchen WS error [%s]: %s", session_id, exc)
     finally:
-        if session and vad.force_flush() and audio_buffer:
-            try:
-                await _handle_utterance(websocket, session, audio_buffer.flush())
-            except Exception:
-                pass
         await _store.remove(session_id)

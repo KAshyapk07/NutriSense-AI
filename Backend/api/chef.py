@@ -574,6 +574,15 @@ def _is_cooking_relevant(text: str) -> bool:
 
 # ── Fast heuristic shortcuts (no LLM needed) ──
 
+# "start cooking" — only matched in prep phase (checked explicitly in _try_heuristic)
+_START_COOKING_PATTERN = re.compile(
+    r"^(?:(?:let'?s|let\s+us|ok(?:ay)?|alright|i(?:'?m)?\s+)?(?:start|begin|time\s+to|ready\s+to)\s+cook(?:ing)?(?:\s+now)?|"
+    r"start\s+cook(?:ing)?(?:\s+now)?|"
+    r"(?:i'?m\s+)?ready(?:\s+to\s+(?:start\s+)?cook)?|"
+    r"(?:let'?s\s+)?cook(?:\s+now)?)$",
+    re.I,
+)
+
 _HEURISTIC_PATTERNS: list[tuple[re.Pattern, VoiceAction]] = [
     (re.compile(r"\b(next\s*(step)?|move\s*on|skip|go\s*ahead)\b", re.I), VoiceAction.NEXT),
     (re.compile(r"\b(prev(ious)?\s*(step)?|go\s*back|back\s*up)\b", re.I), VoiceAction.PREV),
@@ -723,7 +732,7 @@ def _try_heuristic(text: str, mise_en_place: list[str] | None = None, phase: str
     Returns (action, extras_dict) or None.
     extras_dict may contain: prep_item, question, display_text, step.
     """
-    stripped = text.strip()
+    stripped = re.sub(r"[.!?,;:…]+$", "", text.strip())  # strip smart_format punctuation
 
     # 1) Check if this is a question — route to ASK immediately
     if _QUESTION_PATTERNS.search(stripped):
@@ -755,6 +764,10 @@ def _try_heuristic(text: str, mise_en_place: list[str] | None = None, phase: str
             step_num = _fuzzy_match_step(stripped, step_actions)
             if step_num:
                 return (VoiceAction.STRIKE, {"step": step_num, "display_text": f"Marked step {step_num} as done"})
+
+    # 2.5) "start cooking" / "let's cook" — only valid in prep phase
+    if phase == "prep" and _START_COOKING_PATTERN.match(stripped):
+        return (VoiceAction.START_COOKING, {})
 
     # 3) Bare "done" / "finished" / "I'm done" — only when no prep-task words follow
     if _BARE_DONE_PATTERN.match(stripped):

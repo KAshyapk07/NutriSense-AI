@@ -221,6 +221,7 @@ export type VoiceAction =
   | 'REPEAT'
   | 'ASK'
   | 'NOOP'
+  | 'START_COOKING'
 
 export interface ChefIntentRequest {
   raw_text: string
