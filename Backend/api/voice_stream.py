@@ -686,7 +686,11 @@ async def _handle_utterance(
     """
     # ── Step 1: Transcribe ──────────────────────────────────────────
     logger.info("Processing utterance [%s]: %d bytes", session_id, len(audio_data))
-    text = await transcribe_audio(audio_data)
+    
+    # Auto-detect format from magic bytes
+    fmt = "wav" if audio_data.startswith(b"RIFF") else "webm"
+    text = await transcribe_audio(audio_data, fmt=fmt)
+    
     if not text:
         logger.debug("Empty transcript for [%s] — skipping intent", session_id)
         return
@@ -859,8 +863,13 @@ async def chef_voice_websocket(websocket: WebSocket, session_id: str) -> None:
 
             # ── Binary frame: audio chunk from phone ────────────────
             if "bytes" in message and message["bytes"]:
-                chunk = message["bytes"]
-                audio_buffer.extend(chunk)
+                chunk = message["bytes"]                
+                # Client-side VAD sending complete utterance in WAV format.
+                if chunk.startswith(b"RIFF"):
+                    asyncio.create_task(_handle_utterance(websocket, session_id, chunk))
+                    continue
+
+                # Continuous streaming (WebM) with backend VAD.                audio_buffer.extend(chunk)
 
                 # VAD decides when an utterance is complete
                 if vad.feed_chunk(chunk):

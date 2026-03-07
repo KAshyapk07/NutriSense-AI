@@ -166,6 +166,19 @@ export default function ChefRemotePage() {
     })
   }, [chatMessages])
 
+  // Automatically auto-scroll to the latest unchecked prep item
+  useEffect(() => {
+    if (sessionState?.phase === 'prep' && sessionState?.mise_en_place) {
+      const firstUnchecked = sessionState.mise_en_place.find((i) => !i.done)
+      if (firstUnchecked) {
+        const el = document.getElementById(`prep-item-${firstUnchecked.id}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }
+    }
+  }, [sessionState?.mise_en_place, sessionState?.phase])
+
   // ── RENDER ────────────────────────────────────────────────────────
 
   // -- Connecting / Error screen --
@@ -258,9 +271,11 @@ export default function ChefRemotePage() {
         </div>
       </header>
 
-      {/* ── Main scrollable area ── */}
-      <div className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="p-4 pb-2 flex flex-col gap-3">
+      {/* ── Split Layout Area ── */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        {/* Upper Phase Section */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="p-4 pb-2 flex flex-col gap-3">
           {/* Live transcript bar */}
           <AnimatePresence>
             {transcript && (
@@ -333,6 +348,7 @@ export default function ChefRemotePage() {
                   {sessionState.mise_en_place.map((item) => (
                     <button
                       key={item.id}
+                      id={`prep-item-${item.id}`}
                       onClick={() => sendAction('toggle-prep', { id: item.id })}
                       className={cn(
                         'flex items-start gap-3 px-4 py-3 rounded-2xl border transition-all w-full text-left active:scale-[0.98]',
@@ -584,10 +600,11 @@ export default function ChefRemotePage() {
             </div>
           )}
         </div>
+        </div>
 
-        {/* ── Chat panel (messages in scroll area) ── */}
-        <div className="border-t border-white/[0.04] mt-2">
-          <div className="px-4 py-2.5 flex items-center gap-2">
+        {/* ── Chat panel (always visible, up to 40% height) ── */}
+        <div className="flex-none max-h-[40vh] flex flex-col border-t border-white/[0.04] bg-[#09090b] z-10">
+          <div className="px-4 py-2.5 flex items-center gap-2 flex-shrink-0">
             <MessageCircle size={13} className="text-orange-400/60" />
             <span className="text-[11px] font-semibold uppercase tracking-widest text-white/25">
               Chef Assistant
@@ -600,7 +617,7 @@ export default function ChefRemotePage() {
           </div>
 
           {chatMessages.length > 0 && (
-            <div ref={chatScrollRef} className="px-4 pb-2 flex flex-col gap-2">
+            <div ref={chatScrollRef} className="px-4 pb-2 flex flex-col gap-2 flex-1 overflow-y-auto">
               {chatMessages.map((msg, i) => (
                 <div
                   key={i}

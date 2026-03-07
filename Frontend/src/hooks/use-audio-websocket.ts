@@ -107,8 +107,7 @@ export function useAudioWebSocket({
 
   // ── Refs for mutable state not triggering re-renders ────────────
   const wsRef = useRef<WebSocket | null>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
+  const vadRef = useRef<import('@ricky0123/vad-web').MicVAD | null>(null)
   const reconnectAttemptRef = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const intentCallbackRef = useRef<((intent: ChefIntentResponse) => void) | null>(null)
@@ -337,9 +336,10 @@ export function useAudioWebSocket({
       }
 
       // Stop media tracks
-      streamRef.current?.getTracks().forEach((t) => t.stop())
-      streamRef.current = null
-      mediaRecorderRef.current = null
+      if (vadRef.current) {
+        vadRef.current.destroy()
+        vadRef.current = null
+      }
     }
   }, [connect])
 
@@ -359,95 +359,58 @@ export function useAudioWebSocket({
     // Don't start if WS isn't connected
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
 
-    // Already recording
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') return
+    // Already active
+    if (vadRef.current) return
 
     try {
-      // Request microphone access.  On MS Store, this requires the
-      // <DeviceCapability Name="microphone" /> in the AppxManifest.
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          // Optimize for voice: disable noise suppression and echo
-          // cancellation if the device supports it (kitchen environment).
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000,
+      const { MicVAD } = await import('@ricky0123/vad-web')
+
+      const vad = await MicVAD.new({
+        model: 'legacy',
+        baseAssetPath: '/',
+        onnxWASMBasePath: '/',
+        positiveSpeechThreshold: 0.5,
+        negativeSpeechThreshold: 0.35,
+        minSpeechFrames: 3,
+        preSpeechPadFrames: 10,
+        redemptionFrames: 10,
+        onSpeechStart: () => {
+          setListening(true)
+          setErrorMsg(null)
         },
-        video: false,
+        onSpeechEnd: (audio: Float32Array) => {
+          const ws = wsRef.current
+          if (!ws || ws.readyState !== WebSocket.OPEN) return
+          // Send complete WAV to backend
+          ws.send(_encodeWAV(audio, 16000))
+          setListening(false)
+        },
+        onVADMisfire: () => setListening(false),
       })
-      streamRef.current = stream
-
-      // Prefer WebM/Opus — universally supported, efficient for speech.
-      // Fall back to whatever the browser offers if Opus isn't available.
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : ''
-
-      const recorder = new MediaRecorder(stream, {
-        ...(mimeType ? { mimeType } : {}),
-      })
-
-      recorder.ondataavailable = (event: BlobEvent) => {
-        // Stream each chunk as a binary WebSocket frame.
-        // The backend's VoiceActivityDetector uses chunk sizes to
-        // detect speech boundaries (Opus VBR: silence ≈ 30–150 B,
-        // speech ≈ 400–3000 B per 250 ms timeslice).
-        if (event.data.size > 0 && wsRef.current?.readyState === WebSocket.OPEN) {
-          event.data.arrayBuffer().then((buf) => {
-            wsRef.current?.send(buf)
-          })
-        }
-      }
-
-      recorder.onstart = () => {
-        setListening(true)
-        setErrorMsg(null)
-      }
-
-      recorder.onstop = () => {
-        setListening(false)
-      }
-
-      recorder.onerror = () => {
-        setListening(false)
-        setErrorMsg('Microphone error — try toggling the mic button.')
-      }
-
-      mediaRecorderRef.current = recorder
-      recorder.start(timeslice)
+      vadRef.current = vad
+      vad.start()
     } catch (err) {
-      // getUserMedia failures: permission denied, no mic, or secure context required
-      const error = err as DOMException
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+      const e = err as DOMException
+      if (e.name === 'NotAllowedError') {
         setErrorMsg('Microphone access denied. Please allow mic permission and try again.')
-      } else if (error.name === 'NotFoundError') {
+      } else if (e.name === 'NotFoundError') {
         setErrorMsg('No microphone found. Please connect a mic and try again.')
       } else {
-        setErrorMsg(`Microphone error: ${error.message}`)
+        setErrorMsg(`Microphone error: ${e.message}`)
       }
       setListening(false)
     }
-  }, [timeslice])
+  }, [])
 
   /**
-   * Stop the MediaRecorder and notify the backend to flush pending audio.
-   *
-   * Sends a ``stop-recording`` control message so the backend's VAD
-   * force-flushes any accumulated speech buffer for a final transcription.
+   * Stop the VAD and notify the backend to flush pending audio.
    */
   const stopRecording = useCallback(() => {
-    const recorder = mediaRecorderRef.current
-    if (recorder && recorder.state !== 'inactive') {
-      recorder.stop()
+    if (vadRef.current) {
+      vadRef.current.pause()
+      vadRef.current.destroy()
+      vadRef.current = null
     }
-
-    // Stop all media tracks to release the microphone
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    streamRef.current = null
-    mediaRecorderRef.current = null
 
     // Tell the backend to flush any pending audio
     sendJson({ type: 'stop-recording' })
@@ -470,4 +433,34 @@ export function useAudioWebSocket({
     sendChat,
     onIntent,
   }
+}
+
+function _encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  const buffer = new ArrayBuffer(44 + samples.length * 2)
+  const view = new DataView(buffer)
+
+  _writeStr(view, 0, 'RIFF')
+  view.setUint32(4, 36 + samples.length * 2, true)
+  _writeStr(view, 8, 'WAVE')
+  _writeStr(view, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  _writeStr(view, 36, 'data')
+  view.setUint32(40, samples.length * 2, true)
+
+  let offset = 44
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
+  }
+  return buffer
+}
+
+function _writeStr(view: DataView, offset: number, str: string): void {
+  for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i))
 }

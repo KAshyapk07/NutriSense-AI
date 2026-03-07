@@ -179,32 +179,37 @@ def _looks_like_json(text: str) -> bool:
 
 def _regex_extract_steps(raw: str, recipe_name: str) -> ChefParseResponse | None:
     """Last-resort extraction: pull individual step actions from raw text via regex."""
-    # Try to find all action strings
-    action_pattern = re.compile(r'"action"\s*:\s*"((?:[^"\\]|\\.)*?)"', re.DOTALL)
+    # Try to find all action strings (or "step" strings if the LLM improvised)
+    action_pattern = re.compile(r'["\'](?:action|step|text)["\']\s*:\s*["\']((?:[^"\']|\\.)*?)["\']', re.DOTALL)
+    
+    # We want to extract steps first. We must ignore "mise_en_place" entries if they get caught.
+    # To do this safely, we will just use the standard action_pattern but maybe some are mise_en_place.
+    # Actually, a better approach is to rely on the fact that steps are generally longer.
     action_matches = action_pattern.findall(raw)
-    if not action_matches or len(action_matches) < 2:
+    
+    if not action_matches or len(action_matches) < 1:
         return None
 
-    # Try to find mise_en_place text entries
+    # Try to find mise_en_place text entries specifically
     mise_pattern = re.compile(
-        r'"text"\s*:\s*"((?:[^"\\]|\\.)*?)"\s*,\s*"duration_minutes"\s*:\s*(\d+|null)',
+        r'["\']text["\']\s*:\s*["\']((?:[^"\']|\\.)*?)["\']\s*,\s*["\']duration_minutes["\']\s*:\s*(\d+|null)',
         re.DOTALL,
     )
     mise_matches = mise_pattern.findall(raw)
 
     # Try to find timer_seconds for each step
     step_block_pattern = re.compile(
-        r'"action"\s*:\s*"((?:[^"\\]|\\.)*?)"\s*,\s*"timer_seconds"\s*:\s*(\d+|null)',
+        r'["\'](?:action|step)["\']\s*:\s*["\']((?:[^"\']|\\.)*?)["\']\s*,\s*["\']timer_seconds["\']\s*:\s*(\d+|null)',
         re.DOTALL,
     )
     step_blocks = step_block_pattern.findall(raw)
 
     # Try to find tool for each step
     full_step_pattern = re.compile(
-        r'"action"\s*:\s*"((?:[^"\\]|\\.)*?)"'
-        r'\s*,\s*"timer_seconds"\s*:\s*(\d+|null)'
-        r'\s*,\s*"tool"\s*:\s*(?:"((?:[^"\\]|\\.)*?)"|null)'
-        r'(?:\s*,\s*"tip"\s*:\s*(?:"((?:[^"\\]|\\.)*?)"|null))?',
+        r'["\'](?:action|step)["\']\s*:\s*["\']((?:[^"\']|\\.)*?)["\']'
+        r'\s*,\s*["\']timer_seconds["\']\s*:\s*(\d+|null)'
+        r'\s*,\s*["\']tool["\']\s*:\s*(?:["\']((?:[^"\']|\\.)*?)["\']|null)'
+        r'(?:\s*,\s*["\']tip["\']\s*:\s*(?:["\']((?:[^"\']|\\.)*?)["\']|null))?',
         re.DOTALL,
     )
     full_matches = full_step_pattern.findall(raw)
@@ -228,7 +233,8 @@ def _regex_extract_steps(raw: str, recipe_name: str) -> ChefParseResponse | None
                 timer_seconds=int(timer_str) if timer_str != "null" else None,
             ))
     else:
-        for i, act in enumerate(action_matches, 1):
+        # Filter out matches that look like short prep tasks if we have many
+        for i, act in enumerate([a for a in action_matches if len(a) > 10], 1):
             steps.append(CookStep(
                 id=i,
                 action=act.replace("\\n", " ").strip(),
@@ -243,14 +249,19 @@ def _regex_extract_steps(raw: str, recipe_name: str) -> ChefParseResponse | None
         ))
 
     # Extract tools_required
-    tools_match = re.search(r'"tools_required"\s*:\s*\[([^\]]*)\]', raw)
+    tools_match = re.search(r'["\']tools_required["\']\s*:\s*\[([^\]]*)\]', raw)
     tools = []
     if tools_match:
-        tools = [t.strip().strip('"') for t in tools_match.group(1).split(",") if t.strip().strip('"')]
+        tools = [t.strip().strip('"\'') for t in tools_match.group(1).split(",") if t.strip().strip('"\'')]
 
     # Extract estimated_total_minutes
-    minutes_match = re.search(r'"estimated_total_minutes"\s*:\s*(\d+)', raw)
+    minutes_match = re.search(r'["\']estimated_total_minutes["\']\s*:\s*(\d+)', raw)
     total_min = int(minutes_match.group(1)) if minutes_match else None
+
+    # If steps is still empty after filtering, just take all action_matches
+    if not steps and action_matches:
+        for i, act in enumerate(action_matches, 1):
+            steps.append(CookStep(id=i, action=act.replace("\\n", " ").strip()))
 
     logger.info("Regex extraction recovered %d steps, %d mise_en_place items", len(steps), len(mise_items))
     return ChefParseResponse(
@@ -264,20 +275,19 @@ def _regex_extract_steps(raw: str, recipe_name: str) -> ChefParseResponse | None
 
 def _fallback_from_raw_text(raw: str, recipe_name: str) -> ChefParseResponse:
     """Create a structured response by splitting raw text into numbered steps."""
-    # If the text looks like JSON, try regex extraction first
-    if _looks_like_json(raw):
-        regex_result = _regex_extract_steps(raw, recipe_name)
-        if regex_result and len(regex_result.steps) >= 2:
-            return regex_result
-        # Regex extraction failed — return an error, NEVER dump raw JSON as step text
-        return ChefParseResponse(
-            recipe_name=recipe_name,
-            steps=[],
-            parse_error="Could not parse the AI-generated recipe. Please try again.",
-        )
+    
+    # 1) Try regex extraction first, no matter what it looks like
+    regex_result = _regex_extract_steps(raw, recipe_name)
+    if regex_result and len(regex_result.steps) >= 1:
+        return regex_result
 
-    # For genuine plain-text instructions, split on numbered patterns or sentences
-    lines = re.split(r"(?:\d+[.)\-]\s*|\n{2,})", raw.strip())
+    # 2) Strip JSON formatting if any
+    text_to_parse = re.sub(r'["{}\[\]]+', ' ', raw)
+    text_to_parse = re.sub(r'\b(action|timer_seconds|tool|tip|mise_en_place|steps|duration_minutes|tools_required|estimated_total_minutes)\b', '', text_to_parse, flags=re.IGNORECASE)
+    text_to_parse = re.sub(r'\s+', ' ', text_to_parse).strip()
+
+    # 3) Plain text splitting
+    lines = re.split(r"(?:\d+[.)\-]\s*|\n{2,})", text_to_parse)
     steps = []
     for i, line in enumerate(lines, 1):
         line = line.strip()
@@ -285,19 +295,22 @@ def _fallback_from_raw_text(raw: str, recipe_name: str) -> ChefParseResponse:
             steps.append(CookStep(id=i, action=line[:500]))
 
     if not steps:
-        # Last resort: split on single newlines
-        for i, line in enumerate(raw.strip().split("\n"), 1):
+        # Last resort: split on single newlines or periods
+        for i, line in enumerate(re.split(r"[\n.]+", text_to_parse), 1):
             line = line.strip()
             if len(line) > 10:
                 steps.append(CookStep(id=i, action=line[:500]))
 
     if not steps:
-        steps = [CookStep(id=1, action=raw.strip()[:500])]
+        if len(text_to_parse) > 5:
+            steps = [CookStep(id=1, action=text_to_parse[:500])]
+        else:
+            steps = [CookStep(id=1, action="Prepare the ingredients and follow standard cooking procedures for this dish.")]
 
     return ChefParseResponse(
         recipe_name=recipe_name,
         steps=steps,
-        parse_error="The AI could not structure this recipe perfectly. Steps were extracted from the raw instructions.",
+        parse_error="The AI struggled to structure this recipe optimally, so steps were extracted from the raw text.",
     )
 
 
@@ -584,7 +597,8 @@ _START_COOKING_PATTERN = re.compile(
 )
 
 _HEURISTIC_PATTERNS: list[tuple[re.Pattern, VoiceAction]] = [
-    (re.compile(r"\b(next\s*(step)?|move\s*on|skip|go\s*ahead)\b", re.I), VoiceAction.NEXT),
+    (re.compile(r"\b(next\s*(step)?|move\s*on|skip|go\s*ahead|done\s*next)\b", re.I), VoiceAction.NEXT),
+    (re.compile(r"\b(finish\s*(session|cooking)|close\s*session|all\s*done|we\s*are\s*done)\b", re.I), VoiceAction.FINISH_SESSION),
     (re.compile(r"\b(prev(ious)?\s*(step)?|go\s*back|back\s*up)\b", re.I), VoiceAction.PREV),
     (re.compile(r"\b(start\s*timer|begin\s*timer|timer\s*start|start\s*the\s*timer)\b", re.I), VoiceAction.TIMER_START),
     (re.compile(r"\b(stop\s*timer|pause\s*timer|timer\s*(stop|pause)|pause\s*the\s*timer|pause)\b", re.I), VoiceAction.TIMER_PAUSE),
@@ -621,7 +635,7 @@ _ITEM_DONE_PATTERN = re.compile(
 
 # Bare "done" pattern — only matches when it's clearly a step completion
 _BARE_DONE_PATTERN = re.compile(
-    r"^(?:i(?:'?m)?\s+)?(?:done|finished|completed?|all\s+done|step\s+done|mark\s+(?:as\s+)?done|that'?s?\s+done)$",
+    r"^(?:i(?:'?m)?\s+)?(?:done|finished|completed?|all\s+done|step\s+done|mark\s+(?:as\s+)?done|that'?s?\s+done|done\s+next)$",
     re.I,
 )
 
@@ -771,6 +785,8 @@ def _try_heuristic(text: str, mise_en_place: list[str] | None = None, phase: str
 
     # 3) Bare "done" / "finished" / "I'm done" — only when no prep-task words follow
     if _BARE_DONE_PATTERN.match(stripped):
+        if phase == "prep":
+            return (VoiceAction.START_COOKING, {})
         return (VoiceAction.DONE, {})
 
     # 4) Standard navigation / timer heuristics
@@ -828,11 +844,13 @@ Step {body.current_step} of {body.total_steps}: "{body.current_action}"
 </USER_SPEECH>
 
 <ACTIONS>
-- NEXT: go to the next cooking step
+- NEXT: go to the next cooking step (Use for "next", "next step", "done next", "go to next")
 - PREV: go to the previous step
 - DONE: mark current step as finished and advance (same as NEXT but marks completion). Use ONLY for bare "done"/"finished"/"I'm done" without specifying what was done.
 - STRIKE: mark a specific cooking step as done by number (requires "step" field, 1-based integer)
 - STRIKE_PREP: mark a preparation/mise en place task as done (requires "prep_item" field — use EXACT text from the prep tasks list above). Use when the user says things like "done chopping the carrots" or "finished washing the rice".
+- START_COOKING: explicitly transition from preparation phase to the cooking phase. Use when the user says "start cooking", "let's cook", "done with all prep", or "move to cooking".
+- FINISH_SESSION: end the entire cooking session. Use when the user says "finish session", "close session", "we are done", "all done" when all cooking is complete.
 - TIMER_START: start/resume the timer for the current step
 - TIMER_PAUSE: pause the timer
 - TIMER_RESET: reset the timer to its original duration
@@ -851,7 +869,10 @@ Step {body.current_step} of {body.total_steps}: "{body.current_action}"
 - For STRIKE, set "step" to the step number mentioned (1-based integer). "step" must ALWAYS be an integer or null — never a string.
 - For STRIKE_PREP, set "prep_item" to the EXACT text of the matching prep task from the list above. If the user mentions a prep task by description, match it to the closest item.
 - "done with chopping X" or "finished the X" → use STRIKE_PREP if X matches a prep task.
+- "done next" / "next step" / "next" → use NEXT.
 - "I'm done" / "done" (with no specific task) → use DONE.
+- "start cooking" / "ready to cook" → use START_COOKING.
+- "finish session" / "we are done" in the done phase → use FINISH_SESSION.
 - If the user says something like "timer says X but it's already Y" or "this looks done already", use ASK — they're seeking guidance.
 - If the speech is clearly not a cooking command, return NOOP.
 - Output ONLY the JSON object. No markdown, no text.
@@ -972,15 +993,26 @@ async def chef_intent(body: ChefIntentRequest, nutri_router=Depends(get_router))
 
 def _action_display_text(action: VoiceAction, body: ChefIntentRequest, extras: dict) -> str:
     """Generate a human-friendly confirmation message for the chat panel."""
+    # If in prep phase, standard navigation intents act on the prep list
+    if body.phase == "prep":
+        if action in (VoiceAction.NEXT, VoiceAction.DONE):
+            return "Marked next prep item as done."
+        if action == VoiceAction.PREV:
+            return "Cannot go back during prep phase."
+
     match action:
         case VoiceAction.NEXT:
-            next_step = min(body.current_step + 1, body.total_steps)
+            if body.current_step >= body.total_steps:
+                return "All steps complete! Enjoy your meal."
+            next_step = body.current_step + 1
             return f"Moving to step {next_step}"
         case VoiceAction.PREV:
             prev_step = max(body.current_step - 1, 1)
             return f"Going back to step {prev_step}"
         case VoiceAction.DONE:
-            return f"Step {body.current_step} complete!"
+            if body.current_step >= body.total_steps:
+               return "All steps complete! Enjoy your meal."
+            return f"Step {body.current_step} complete! Moving to step {body.current_step + 1}."
         case VoiceAction.STRIKE:
             s = extras.get("step")
             return f"Marked step {s} as done" if s else "Marked step as done"
@@ -999,5 +1031,9 @@ def _action_display_text(action: VoiceAction, body: ChefIntentRequest, extras: d
             return ""  # ASK responses come from the chat LLM, not here
         case VoiceAction.NOOP:
             return "I didn't understand that. Try 'next step', 'start timer', or ask me a question."
+        case VoiceAction.START_COOKING:
+            return "Starting cooking!"
+        case VoiceAction.FINISH_SESSION:
+            return "Enjoy your meal! Closing session."
         case _:
             return ""
