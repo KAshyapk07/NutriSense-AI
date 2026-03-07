@@ -204,3 +204,67 @@ export interface ChefParseResponse {
   estimated_total_minutes: number | null
   parse_error: string | null
 }
+
+/* ──────────────────────────────────────────────
+   Phase 5.5 — P2P Voice Kitchen Remote types
+   ────────────────────────────────────────────── */
+
+export type VoiceAction =
+  | 'NEXT'
+  | 'PREV'
+  | 'DONE'
+  | 'STRIKE'
+  | 'STRIKE_PREP'
+  | 'TIMER_START'
+  | 'TIMER_PAUSE'
+  | 'TIMER_RESET'
+  | 'REPEAT'
+  | 'ASK'
+  | 'NOOP'
+  | 'START_COOKING'
+  | 'FINISH_SESSION'
+
+export interface ChefIntentRequest {
+  raw_text: string
+  recipe_name: string
+  current_step: number
+  total_steps: number
+  current_action: string
+  timer_running: boolean
+  timer_seconds_left: number | null
+  phase?: string
+  mise_en_place?: string[]
+}
+
+export interface ChefIntentResponse {
+  action: VoiceAction
+  step: number | null
+  question: string | null
+  confidence: number
+  filtered: boolean
+  prep_item: string | null
+  display_text: string | null
+}
+
+export interface CookingSessionState {
+  recipe_name: string
+  current_step: number
+  total_steps: number
+  current_action: string
+  current_tool: string | null
+  current_tip: string | null
+  timer_total: number | null
+  timer_left: number | null
+  timer_running: boolean
+  completed_steps: number[]
+  phase: 'prep' | 'cooking' | 'done'
+  steps_overview: Array<{ id: string; action: string; completed: string }>
+  /** Preparation tasks (sent during prep and cooking phases) */
+  mise_en_place?: Array<{ id: number; text: string; done: boolean }>
+  /** Tools required for the recipe */
+  tools_required?: string[]
+  /** Estimated total cook time in minutes */
+  estimated_total_minutes?: number | null
+  /** Chat messages synced from PC Q&A panel */
+  chat_messages?: Array<{ role: 'user' | 'assistant'; content: string }>
+}

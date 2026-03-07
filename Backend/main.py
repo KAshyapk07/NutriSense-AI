@@ -4,7 +4,7 @@ import os
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -13,6 +13,8 @@ from Backend.api import chef as chef_api
 from Backend.api import health as health_api
 from Backend.api import process as process_api
 from Backend.api import search as search_api
+from Backend.api import voice_stream as voice_stream_api
+from Backend.api import kitchen as kitchen_api
 from Backend.core.config import settings
 from Backend.core.lifespan import lifespan
 
@@ -47,6 +49,8 @@ app.include_router(health_api.router)
 app.include_router(search_api.router)
 app.include_router(chat_api.router)
 app.include_router(chef_api.router)
+app.include_router(voice_stream_api.router)
+app.include_router(kitchen_api.router)
 
 
 # Exception handlers
@@ -67,15 +71,35 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Static files
+# Static files & SPA fallback
 # Set SERVE_STATIC=false to disable when using Nginx or CDN in production.
 if settings.serve_static and os.path.isdir(settings.frontend_dir):
-    app.mount(
-        "/",
-        StaticFiles(directory=settings.frontend_dir, html=True),
-        name="frontend",
-    )
-    logger.info("Serving static files from '%s'", settings.frontend_dir)
+    _index_html = os.path.join(settings.frontend_dir, "index.html")
+    _assets_dir = os.path.join(settings.frontend_dir, "assets")
+
+    # Serve hashed JS/CSS bundles from /assets
+    if os.path.isdir(_assets_dir):
+        app.mount(
+            "/assets",
+            StaticFiles(directory=_assets_dir),
+            name="frontend-assets",
+        )
+
+    # SPA catch-all: any GET that didn't match an API endpoint or /assets
+    # is either a root-level static file (vite.svg, favicon.ico …) or a
+    # React Router client-side route (e.g. /chef-remote, /search).
+    @app.api_route("/{full_path:path}", methods=["GET"], include_in_schema=False)
+    async def spa_fallback(request: Request, full_path: str):  # noqa: ARG001
+        # First check if it's a real file in the build dir (e.g. /vite.svg)
+        candidate = os.path.join(settings.frontend_dir, full_path)
+        if full_path and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        # Otherwise serve index.html for client-side routing
+        if os.path.isfile(_index_html):
+            return FileResponse(_index_html, media_type="text/html")
+        return JSONResponse(status_code=404, content={"error": "Frontend not built."})
+
+    logger.info("Serving SPA from '%s' with catch-all fallback", settings.frontend_dir)
 else:
     logger.info(
         "Static file serving disabled (SERVE_STATIC=false or dir not found)."

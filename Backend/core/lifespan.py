@@ -1,14 +1,20 @@
 import os
 import logging
+import pathlib
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 
-from Backend.core.config import settings
-from Backend.dependencies import neo4j as neo4j_dep
-from Backend.dependencies import model as model_dep
-from Backend.dependencies import router as router_dep
-from Backend.dependencies import graph_rag as graph_rag_dep
+# Load .env early — uvicorn's reload=True spawns a child process that
+# re-imports this module, so run.py's load_dotenv() alone isn't enough.
+load_dotenv(pathlib.Path(__file__).resolve().parents[2] / ".env")
+
+from Backend.core.config import settings  # noqa: E402
+from Backend.dependencies import neo4j as neo4j_dep  # noqa: E402
+from Backend.dependencies import model as model_dep  # noqa: E402
+from Backend.dependencies import router as router_dep  # noqa: E402
+from Backend.dependencies import graph_rag as graph_rag_dep  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
