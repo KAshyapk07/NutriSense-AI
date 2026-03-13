@@ -1,37 +1,66 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Optional
 
-import numpy as np
-import tensorflow as tf
+import torch
+import torch.nn as nn
+import torchvision.transforms as T
 from PIL import Image
-from tensorflow.keras.applications.efficientnet import preprocess_input
+
+import timm
 
 logger = logging.getLogger(__name__)
 
 MODEL_PATH = os.getenv(
-    "MODEL_PATH", r"Src\Image_classifier\models\efficientb4_best.h5"
+    "MODEL_PATH", r"Src\Image_classifier\models\nutrisense_convnext_small_best.pth"
 )
-CLASS_NAMES_PATH = os.getenv("CLASS_NAMES_PATH", "class_names.json")
-IMAGE_SIZE = (256, 256)
+
+_INFERENCE_TRANSFORM = T.Compose([
+    T.Resize(256),
+    T.CenterCrop(224),
+    T.ToTensor(),
+    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+
+def _build_convnext(num_classes: int) -> nn.Module:
+    model = timm.create_model(
+        "convnext_small.fb_in22k_ft_in1k",
+        pretrained=False,
+        drop_path_rate=0.2,
+    )
+    in_features = model.head.fc.in_features
+    model.head.fc = nn.Sequential(
+        nn.LayerNorm(in_features),
+        nn.Dropout(p=0.3),
+        nn.Linear(in_features, 512),
+        nn.GELU(),
+        nn.Dropout(p=0.2),
+        nn.Linear(512, num_classes),
+    )
+    return model
 
 
 class ImageModelWrapper:
-    def __init__(self, model: tf.keras.Model, class_names: list[str]):
+    def __init__(self, model: nn.Module, class_names: list[str], device: torch.device):
         self._model = model
         self._class_names = class_names
+        self._device = device
 
-    def predict(self, image_path: str) -> tuple[str, float]:
-        img = Image.open(image_path).convert("RGB").resize(IMAGE_SIZE)
-        img_array = preprocess_input(
-            np.expand_dims(np.array(img), axis=0).astype("float32")
-        )
-        predictions = self._model.predict(img_array, verbose=0)
-        idx = int(np.argmax(predictions[0]))
-        return self._class_names[idx], float(predictions[0][idx])
+    def predict(self, image_path: str, top_k: int = 3) -> list[tuple[str, float]]:
+        img = Image.open(image_path).convert("RGB")
+        tensor = _INFERENCE_TRANSFORM(img).unsqueeze(0).to(self._device)
+        with torch.no_grad():
+            logits = self._model(tensor)
+            probs = torch.softmax(logits, dim=1)[0]
+        k = min(top_k, len(self._class_names))
+        top_probs, top_indices = torch.topk(probs, k)
+        return [
+            (self._class_names[idx.item()], float(prob.item()))
+            for idx, prob in zip(top_indices, top_probs)
+        ]
 
     @property
     def num_classes(self) -> int:
@@ -45,51 +74,22 @@ class ImageModelWrapper:
 _wrapper: Optional[ImageModelWrapper] = None
 
 
-def _load_class_names() -> list[str]:
-    """Three-tier fallback matching existing main.py logic."""
-    # Tier 1 — class_names.json at project root
-    if os.path.exists(CLASS_NAMES_PATH):
-        with open(CLASS_NAMES_PATH, "r") as f:
-            return json.load(f)
-
-    # Tier 2 — meta.json alongside the model
-    meta_path = os.path.join(os.path.dirname(MODEL_PATH), "meta.json")
-    if os.path.exists(meta_path):
-        with open(meta_path, "r") as f:
-            meta = json.load(f)
-            if "class_names" in meta:
-                return meta["class_names"]
-
-    # Tier 3 — scan Dataset/Images/ folder structure
-    images_dir = "Dataset/Images"
-    if os.path.isdir(images_dir):
-        names = sorted(
-            d
-            for d in os.listdir(images_dir)
-            if os.path.isdir(os.path.join(images_dir, d))
-        )
-        if names:
-            logger.warning(
-                "class_names.json not found; derived %d classes from Dataset/Images/",
-                len(names),
-            )
-            return names
-
-    raise FileNotFoundError(
-        "Could not load class names from class_names.json, meta.json, "
-        "or Dataset/Images/."
-    )
-
-
 def init() -> None:
     global _wrapper
-    model = tf.keras.models.load_model(MODEL_PATH)
-    class_names = _load_class_names()
-    _wrapper = ImageModelWrapper(model, class_names)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ckpt = torch.load(MODEL_PATH, map_location="cpu", weights_only=False)
+    class_names: list[str] = list(ckpt["class_names"])
+    model = _build_convnext(len(class_names))
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.to(device)
+    model.eval()
+    _wrapper = ImageModelWrapper(model, class_names, device)
     logger.info(
-        "Image model loaded — %d classes | path: %s",
+        "ConvNeXt-Small loaded — %d classes | device: %s | epoch: %d | val_acc: %.2f%%",
         _wrapper.num_classes,
-        MODEL_PATH,
+        device,
+        ckpt.get("epoch", -1),
+        ckpt.get("val_acc", 0.0) * 100,
     )
 
 

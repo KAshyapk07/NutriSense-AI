@@ -254,8 +254,8 @@ Return ONLY valid JSON (no markdown, no explanation):
     def execute(self, text_query=None, image_input=None):
         try:
             if image_input is not None:
-                dish_name, img_conf = self.image_model.predict(image_input)
-                return self.handle_extraction(dish_name, override_conf=img_conf)
+                top_predictions = self.image_model.predict(image_input)
+                return self.handle_image_extraction(top_predictions)
 
             if not text_query or text_query.strip() == "":
                 return {
@@ -328,6 +328,41 @@ Return ONLY valid JSON (no markdown, no explanation):
 
         except Exception as e:
             return self.engine.estimate_nutrition(name)
+
+    def handle_image_extraction(self, predictions: list) -> dict:
+        image_predictions = [
+            {"label": label, "score": round(score, 4)} for label, score in predictions
+        ]
+        try:
+            for label, score in predictions:
+                cluster = self._detect_cluster(label)
+                res = self._lookup_by_cluster(label, cluster)
+                if cluster == "product" and (not res or res.get("status") != "FOUND"):
+                    res = search_recipe(label, self.neo4j_client)
+                    cluster = "recipe"
+                if res and res.get("status") == "FOUND" and res.get("results"):
+                    out = res["results"][0].copy()
+                    out["pathway"] = "extraction"
+                    out["cluster"] = res.get("cluster", cluster)
+                    out["accuracy"] = float(score)
+                    variants = []
+                    for r in res["results"][1:4]:
+                        v = r.copy()
+                        v["pathway"] = "extraction"
+                        v["cluster"] = res.get("cluster", cluster)
+                        if "confidence" in v:
+                            v["accuracy"] = float(v["confidence"])
+                        variants.append(v)
+                    out["variants"] = variants
+                    out["meta"] = {"image_predictions": image_predictions}
+                    return out
+            top_label, _ = predictions[0]
+            result = self.engine.estimate_nutrition(top_label)
+            result["meta"] = {"image_predictions": image_predictions}
+            return result
+        except Exception as e:
+            top_label, _ = predictions[0]
+            return self.engine.estimate_nutrition(top_label)
 
     def handle_modification(self, name, constraint):
         try:
@@ -459,10 +494,10 @@ Return ONLY valid JSON (no markdown, no explanation):
     ) -> dict:
         try:
             if image_input is not None:
-                dish_name, img_conf = await asyncio.to_thread(
+                top_predictions = await asyncio.to_thread(
                     self.image_model.predict, image_input
                 )
-                return await self._async_handle_extraction(dish_name, override_conf=img_conf)
+                return await self._async_handle_image_extraction(top_predictions)
 
             if not text_query or text_query.strip() == "":
                 return {
@@ -534,6 +569,41 @@ Return ONLY valid JSON (no markdown, no explanation):
 
         except Exception:
             return await self.engine.estimate_nutrition_async(name)
+
+    async def _async_handle_image_extraction(self, predictions: list) -> dict:
+        image_predictions = [
+            {"label": label, "score": round(score, 4)} for label, score in predictions
+        ]
+        try:
+            for label, score in predictions:
+                cluster = self._detect_cluster(label)
+                res = await self._async_lookup_by_cluster(label, cluster)
+                if cluster == "product" and (not res or res.get("status") != "FOUND"):
+                    res = await asyncio.to_thread(search_recipe, label, self.neo4j_client)
+                    cluster = "recipe"
+                if res and res.get("status") == "FOUND" and res.get("results"):
+                    out = res["results"][0].copy()
+                    out["pathway"] = "extraction"
+                    out["cluster"] = res.get("cluster", cluster)
+                    out["accuracy"] = float(score)
+                    variants = []
+                    for r in res["results"][1:4]:
+                        v = r.copy()
+                        v["pathway"] = "extraction"
+                        v["cluster"] = res.get("cluster", cluster)
+                        if "confidence" in v:
+                            v["accuracy"] = float(v["confidence"])
+                        variants.append(v)
+                    out["variants"] = variants
+                    out["meta"] = {"image_predictions": image_predictions}
+                    return out
+            top_label, _ = predictions[0]
+            result = await self.engine.estimate_nutrition_async(top_label)
+            result["meta"] = {"image_predictions": image_predictions}
+            return result
+        except Exception:
+            top_label, _ = predictions[0]
+            return await self.engine.estimate_nutrition_async(top_label)
 
     async def _async_handle_modification(self, name: str, constraint: str) -> dict:
         try:

@@ -32,7 +32,7 @@ import { NutritionCard } from '@/components/ui/nutrition-card'
 import { ComparisonView } from '@/components/ui/comparison-view'
 import { SearchResultCard } from '@/components/ui/search-result-card'
 import { SkeletonLoader } from '@/components/ui/skeleton-loader'
-import { processQuery } from '@/lib/api'
+import { processQuery, chatWithProduct } from '@/lib/api'
 import {
   isComparison,
   isExtraction,
@@ -43,6 +43,7 @@ import {
   type ExtractionResponse,
   type RouterSearchResponse,
   type SearchResult,
+  type ChatMessagePayload
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -56,6 +57,7 @@ interface ChatMessage {
   status: 'loading' | 'error' | 'done'
   result?: ProcessResponse
   error?: string
+  chatReply?: string
 }
 
 /* ── Variant card — shows as a full NutritionCard with toggle ──── */
@@ -221,7 +223,24 @@ function AiBubble({
     )
   }
 
-  const { result } = msg
+  const { result, chatReply } = msg
+
+  if (chatReply) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col gap-4 w-full max-w-screen-xl"
+      >
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
+          <div className="prose prose-sm dark:prose-invert max-w-none text-[var(--color-text)] whitespace-pre-wrap">
+            {chatReply}
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
+
   if (!result) return null
 
   return (
@@ -255,6 +274,29 @@ function AiBubble({
             source={result.source}
             estimated={result.estimated}
           />
+          {result.meta?.image_predictions && Array.isArray(result.meta.image_predictions) && (
+            <div className="flex flex-wrap items-center gap-2 px-1">
+              <span className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+                Recognised
+              </span>
+              {(result.meta.image_predictions as Array<{ label: string; score: number }>).map(
+                (p, i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-sm',
+                      i === 0
+                        ? 'border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-text)]'
+                        : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]',
+                    )}
+                  >
+                    <span className="font-medium capitalize">{p.label.replace(/_/g, ' ')}</span>
+                    <span className="tabular-nums">{Math.round(p.score * 100)}%</span>
+                  </span>
+                ),
+              )}
+            </div>
+          )}
           {result.variants && result.variants.length > 0 && (
             <div className="flex flex-col gap-4">
               <p className="text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wide px-1">
@@ -297,6 +339,77 @@ function AiBubble({
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   Helpers — extract food context from the first done result
+═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * Builds the context object passed to POST /chat.
+ * - Extraction: sends all nutrition fields, ingredients and instructions.
+ * - Comparison: sends both dishes with their full nutrition so the LLM
+ *   can answer intelligently about either or both.
+ * Returns null if no grounding context is available.
+ */
+function buildFoodContext(msgs: ChatMessage[]): Record<string, unknown> | null {
+  const firstDone = msgs.find((m) => m.status === 'done' && m.result)
+  if (!firstDone?.result) return null
+
+  const r = firstDone.result
+
+  if (isExtraction(r)) {
+    return {
+      recipe_name: r.recipe_name,
+      source: r.source,
+      ...r.nutrition,
+      ingredients: r.ingredients,
+      instructions: r.instructions,
+    }
+  }
+
+  if (isComparison(r)) {
+    return {
+      context_type: 'comparison',
+      dish_a: r.dish_a,
+      dish_b: r.dish_b,
+      // Flatten nutrition_a with prefix
+      ...Object.fromEntries(
+        Object.entries(r.nutrition_a ?? {}).map(([k, v]) => [`${r.dish_a ?? 'dish_a'}_${k}`, v]),
+      ),
+      // Flatten nutrition_b with prefix
+      ...Object.fromEntries(
+        Object.entries(r.nutrition_b ?? {}).map(([k, v]) => [`${r.dish_b ?? 'dish_b'}_${k}`, v]),
+      ),
+      comparison_summary: r.llm_response,
+    }
+  }
+
+  if (isModification(r)) {
+    return {
+      recipe_name: r.recipe_name,
+      constraint: r.constraint,
+      ...r.nutrition,
+      ingredients: r.ingredients,
+    }
+  }
+
+  return null
+}
+
+/**
+ * Derives a rolling 6-turn chat history from previous chat-reply messages
+ * so the LLM maintains multi-turn context.
+ */
+function buildChatHistory(msgs: ChatMessage[]): ChatMessagePayload[] {
+  const history: ChatMessagePayload[] = []
+  for (const m of msgs) {
+    if (m.chatReply) {
+      history.push({ role: 'user', content: m.query })
+      history.push({ role: 'assistant', content: m.chatReply })
+    }
+  }
+  return history.slice(-12) // last 6 turns (12 messages)
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    Main chat page
 ═══════════════════════════════════════════════════════════════════ */
 
@@ -309,7 +422,7 @@ export default function Results() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const initialQuerySent = useRef(false)
 
-  /* ── Send a query ── */
+  /* ── Send a brand-new process query (initial load or new food lookup) ── */
   const sendQuery = useCallback(async (query: string, imageFile?: File) => {
     const id = `${Date.now()}-${Math.random()}`
     const imagePreview = imageFile ? URL.createObjectURL(imageFile) : undefined
@@ -339,13 +452,61 @@ export default function Results() {
     }
   }, [])
 
+  /**
+   * Send a follow-up typed question to POST /chat, grounded with the food
+   * context extracted from the first done result (extraction OR comparison).
+   * Falls back to processQuery if no context is available yet.
+   */
+  const sendChatMessage = useCallback(
+    async (query: string, currentMessages: ChatMessage[]) => {
+      const ctx = buildFoodContext(currentMessages)
+
+      // If there is no grounding context, treat as a new process query
+      if (!ctx) {
+        return sendQuery(query)
+      }
+
+      const id = `${Date.now()}-${Math.random()}`
+      setMessages((prev) => [...prev, { id, query, status: 'loading' }])
+
+      try {
+        const history = buildChatHistory(currentMessages)
+        const res = await chatWithProduct({ message: query, context: ctx, history })
+        setMessages((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, status: 'done', chatReply: res.reply } : m)),
+        )
+      } catch (err) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  status: 'error',
+                  error: err instanceof Error ? err.message : 'Chat unavailable. Please try again.',
+                }
+              : m,
+          ),
+        )
+      }
+    },
+    [sendQuery],
+  )
+
   /* ── Retry failed message ── */
   const retryMessage = useCallback(
     (msg: ChatMessage) => {
-      setMessages((prev) => prev.filter((m) => m.id !== msg.id))
-      sendQuery(msg.query, msg.imageFile)
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== msg.id)
+        // If it was a chat reply, retry as chat; otherwise as process query
+        if (msg.chatReply !== undefined || buildFoodContext(without) !== null) {
+          void sendChatMessage(msg.query, without)
+        } else {
+          void sendQuery(msg.query, msg.imageFile)
+        }
+        return without
+      })
     },
-    [sendQuery],
+    [sendQuery, sendChatMessage],
   )
 
   /* ── Seed from navigation state on mount ── */
@@ -382,7 +543,9 @@ export default function Results() {
     if (!q) return
     setInputValue('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
-    sendQuery(q)
+    // If food context exists from a prior result, route to /chat (grounded Q&A)
+    // Otherwise treat as a fresh process query
+    void sendChatMessage(q, messages)
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
