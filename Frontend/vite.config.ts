@@ -4,6 +4,8 @@ import path from 'path'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 
 export default defineConfig({
+  // Centralize env in project-root .env
+  envDir: '..',
   plugins: [
     react(),
     viteStaticCopy({
@@ -65,6 +67,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true,
+      },
+      '/auth': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
       },
       '/api': {
         target: 'http://127.0.0.1:8000',

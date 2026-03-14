@@ -5,17 +5,20 @@ import App from './App'
 import { ThemeProvider } from './hooks/use-theme'
 import { SidebarProvider } from './hooks/use-sidebar'
 import { PreferencesProvider } from './hooks/use-preferences'
+import { AuthProvider } from './hooks/use-auth'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <ThemeProvider>
-        <SidebarProvider>
-          <PreferencesProvider>
-            <App />
-          </PreferencesProvider>
-        </SidebarProvider>
+        <AuthProvider>
+          <SidebarProvider>
+            <PreferencesProvider>
+              <App />
+            </PreferencesProvider>
+          </SidebarProvider>
+        </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>,

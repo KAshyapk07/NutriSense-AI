@@ -1,4 +1,4 @@
-﻿
+
 import os
 from typing import List, Dict, Optional, Any
 from neo4j import GraphDatabase
@@ -172,6 +172,32 @@ class Neo4jClient:
                 "recipes": 0, "ingredients": 0, "cuisines": 0, "image_classes": 0,
                 "food_products": 0, "brands": 0, "categories": 0, "allergen_tags": 0,
             }
+
+    def ensure_auth_user(self, uid: str, email: Optional[str], name: Optional[str]) -> Dict[str, Any]:
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MERGE (u:User {id: $uid})
+                ON CREATE SET
+                    u.email = $email,
+                    u.name = $name,
+                    u.created_at = datetime(),
+                    u.updated_at = datetime()
+                ON MATCH SET
+                    u.email = coalesce($email, u.email),
+                    u.name = coalesce($name, u.name),
+                    u.updated_at = datetime()
+                RETURN
+                    u.id AS id,
+                    u.email AS email,
+                    u.name AS name
+                """,
+                uid=uid,
+                email=email,
+                name=name,
+            )
+            record = result.single()
+            return dict(record) if record else {"id": uid, "email": email, "name": name}
 
     # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # Cluster B â€” FoodProduct queries

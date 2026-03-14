@@ -40,6 +40,21 @@ class Settings:
     public_url: Optional[str] = field(
         default_factory=lambda: os.getenv("PUBLIC_URL") or None
     )
+    auth_secret_key: str = field(
+        default_factory=lambda: os.getenv("AUTH_SECRET_KEY", "")
+    )
+    auth_access_token_minutes: int = field(
+        default_factory=lambda: int(os.getenv("AUTH_ACCESS_TOKEN_MINUTES", "15"))
+    )
+    auth_refresh_token_days: int = field(
+        default_factory=lambda: int(os.getenv("AUTH_REFRESH_TOKEN_DAYS", "180"))
+    )
+    firebase_service_account_path: Optional[str] = field(
+        default_factory=lambda: os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") or None
+    )
+    firebase_project_id: Optional[str] = field(
+        default_factory=lambda: os.getenv("FIREBASE_PROJECT_ID") or None
+    )
 
     @property
     def max_content_bytes(self) -> int:

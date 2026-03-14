@@ -11,11 +11,13 @@ import {
   Settings,
   Leaf,
   LogIn,
+  LogOut,
   ChevronRight,
 } from 'lucide-react'
 import { Logo } from '@/components/ui/logo'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { useSidebar } from '@/hooks/use-sidebar'
+import { useAuth, useLogout } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -67,14 +69,8 @@ const featureItems: NavItem[] = [
 
 const accountItems: NavItem[] = [
   {
-    label: 'Profile',
-    description: 'Your stats, search history & saved recipes',
-    icon: User,
-    path: '/profile',
-  },
-  {
-    label: 'Settings',
-    description: 'Appearance, diet preferences & allergens',
+    label: 'My Account',
+    description: 'Profile, dietary preferences & app settings',
     icon: Settings,
     path: '/settings',
   },
@@ -84,10 +80,17 @@ export function Sidebar() {
   const { open, closeSidebar } = useSidebar()
   const navigate = useNavigate()
   const location = useLocation()
+  const { user, isAuthenticated } = useAuth()
+  const logout = useLogout()
 
   const handleNav = (path: string) => {
     navigate(path)
     closeSidebar()
+  }
+
+  const handleLogout = () => {
+    closeSidebar()
+    logout()
   }
 
   const isActive = (item: NavItem) => {
@@ -242,25 +245,50 @@ export function Sidebar() {
               </section>
             </nav>
 
-            {/* Footer — guest user strip + theme */}
+            {/* Footer — user strip + theme */}
             <div className="border-t border-[var(--color-border)]">
-              {/* Guest strip */}
-              <button
-                onClick={() => handleNav('/profile')}
-                className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-[var(--color-bg)] transition-colors duration-150"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-bg)] border border-[var(--color-border)]">
-                  <User size={15} className="text-[var(--color-text-muted)]" />
+              {isAuthenticated && user ? (
+                /* Logged-in user strip */
+                <div className="flex items-center gap-3 px-5 py-3.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full
+                    bg-[var(--color-accent)] text-[var(--color-accent-contrast)]
+                    text-xs font-bold font-sans flex-shrink-0 select-none">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-medium text-[var(--color-text)] leading-none truncate">{user.name}</p>
+                    <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 leading-none truncate">{user.email}</p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    aria-label="Sign out"
+                    title="Sign out"
+                    className="flex h-8 w-8 items-center justify-center rounded-full flex-shrink-0
+                      text-[var(--color-text-muted)] hover:text-[var(--color-text)]
+                      hover:bg-[var(--color-bg)] transition-colors duration-150"
+                  >
+                    <LogOut size={15} strokeWidth={1.75} />
+                  </button>
                 </div>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-[var(--color-text)] leading-none">Guest User</p>
-                  <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 leading-none flex items-center gap-1">
-                    <LogIn size={10} />
-                    Sign in for personalisation
-                  </p>
-                </div>
-                <ChevronRight size={14} className="text-[var(--color-text-muted)]" />
-              </button>
+              ) : (
+                /* Guest strip */
+                <button
+                  onClick={() => handleNav('/login')}
+                  className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-[var(--color-bg)] transition-colors duration-150"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-bg)] border border-[var(--color-border)]">
+                    <User size={15} className="text-[var(--color-text-muted)]" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-sm font-medium text-[var(--color-text)] leading-none">Guest User</p>
+                    <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 leading-none flex items-center gap-1">
+                      <LogIn size={10} />
+                      Sign in for personalisation
+                    </p>
+                  </div>
+                  <ChevronRight size={14} className="text-[var(--color-text-muted)]" />
+                </button>
+              )}
 
               {/* Theme row */}
               <div className="px-5 py-3 border-t border-[var(--color-border)] flex items-center justify-between">

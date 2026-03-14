@@ -1,4 +1,15 @@
-import type { ProcessResponse, SearchResponse, SearchFilters, ChatRequest, ChatResponseData, ChefParseRequest, ChefParseResponse, ChefIntentRequest, ChefIntentResponse } from './types'
+import type {
+  ProcessResponse,
+  SearchResponse,
+  SearchFilters,
+  ChatRequest,
+  ChatResponseData,
+  ChefParseRequest,
+  ChefParseResponse,
+  ChefIntentRequest,
+  ChefIntentResponse,
+  TokenPairResponse,
+} from './types'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -7,6 +18,62 @@ const API_BASE = import.meta.env.VITE_API_URL ?? ''
 // warning page instead of the expected JSON response.
 const COMMON_HEADERS: Record<string, string> = {
   'ngrok-skip-browser-warning': '1',
+}
+
+interface AuthApiConfig {
+  getAccessToken: () => string | null
+  refreshAccessToken: () => Promise<string | null>
+}
+
+let authApiConfig: AuthApiConfig | null = null
+
+export function configureAuthApi(config: AuthApiConfig | null): void {
+  authApiConfig = config
+}
+
+interface ApiRequestOptions extends RequestInit {
+  skipAuthRetry?: boolean
+}
+
+async function apiFetch(path: string, init: ApiRequestOptions = {}): Promise<Response> {
+  const headers = new Headers(init.headers ?? {})
+  Object.entries(COMMON_HEADERS).forEach(([k, v]) => headers.set(k, v))
+
+  const accessToken = authApiConfig?.getAccessToken() ?? null
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`)
+  }
+
+  const firstResponse = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
+  })
+
+  if (
+    firstResponse.status !== 401 ||
+    init.skipAuthRetry ||
+    !authApiConfig?.refreshAccessToken
+  ) {
+    return firstResponse
+  }
+
+  const refreshedAccessToken = await authApiConfig.refreshAccessToken()
+  if (!refreshedAccessToken) return firstResponse
+
+  const retryHeaders = new Headers(init.headers ?? {})
+  Object.entries(COMMON_HEADERS).forEach(([k, v]) => retryHeaders.set(k, v))
+  retryHeaders.set('Authorization', `Bearer ${refreshedAccessToken}`)
+
+  return fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: retryHeaders,
+    skipAuthRetry: true,
+  } as ApiRequestOptions)
+}
+
+async function readErrorAndThrow(res: Response): Promise<never> {
+  const text = await res.text()
+  throw new Error(`Server error ${res.status}: ${text}`)
 }
 
 // ── App config (exposes PUBLIC_URL set in backend .env) ──────────────────────
@@ -26,7 +93,7 @@ export interface AppConfig {
  */
 export async function getAppConfig(): Promise<AppConfig> {
   try {
-    const res = await fetch(`${API_BASE}/config`, { headers: COMMON_HEADERS })
+    const res = await apiFetch('/config')
     if (!res.ok) return { remote_base_url: '', deployment: 'local' }
     return res.json()
   } catch {
@@ -42,16 +109,12 @@ export async function processQuery(
   if (query) form.append('query', query)
   if (image) form.append('image', image)
 
-  const res = await fetch(`${API_BASE}/process`, {
+  const res = await apiFetch('/process', {
     method: 'POST',
-    headers: COMMON_HEADERS,
     body: form,
   })
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Server error ${res.status}: ${text}`)
-  }
+  if (!res.ok) await readErrorAndThrow(res)
 
   return res.json()
 }
@@ -71,59 +134,73 @@ export async function searchQuery(
     for (const a of filters.excludeAllergens) params.append('exclude_allergens', a)
   }
 
-  const res = await fetch(`${API_BASE}/search?${params.toString()}`, {
-    headers: COMMON_HEADERS,
-  })
+  const res = await apiFetch(`/search?${params.toString()}`)
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Server error ${res.status}: ${text}`)
-  }
+  if (!res.ok) await readErrorAndThrow(res)
 
   return res.json()
 }
 
 export async function chatWithProduct(body: ChatRequest): Promise<ChatResponseData> {
-  const res = await fetch(`${API_BASE}/chat`, {
+  const res = await apiFetch('/chat', {
     method: 'POST',
-    headers: { ...COMMON_HEADERS, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Server error ${res.status}: ${text}`)
-  }
+  if (!res.ok) await readErrorAndThrow(res)
 
   return res.json()
 }
 
 export async function chefParse(body: ChefParseRequest): Promise<ChefParseResponse> {
-  const res = await fetch(`${API_BASE}/chef/parse`, {
+  const res = await apiFetch('/chef/parse', {
     method: 'POST',
-    headers: { ...COMMON_HEADERS, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Server error ${res.status}: ${text}`)
-  }
+  if (!res.ok) await readErrorAndThrow(res)
 
   return res.json()
 }
 
 export async function chefIntent(body: ChefIntentRequest): Promise<ChefIntentResponse> {
-  const res = await fetch(`${API_BASE}/chef/intent`, {
+  const res = await apiFetch('/chef/intent', {
     method: 'POST',
-    headers: { ...COMMON_HEADERS, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Server error ${res.status}: ${text}`)
-  }
+  if (!res.ok) await readErrorAndThrow(res)
 
+  return res.json()
+}
+
+export async function loginWithFirebaseToken(firebaseIdToken: string): Promise<TokenPairResponse> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: {
+      ...COMMON_HEADERS,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ firebase_id_token: firebaseIdToken }),
+  })
+
+  if (!res.ok) await readErrorAndThrow(res)
+  return res.json()
+}
+
+export async function refreshTokenPair(refreshToken: string): Promise<TokenPairResponse> {
+  const res = await fetch(`${API_BASE}/auth/refresh`, {
+    method: 'POST',
+    headers: {
+      ...COMMON_HEADERS,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  })
+
+  if (!res.ok) await readErrorAndThrow(res)
   return res.json()
 }

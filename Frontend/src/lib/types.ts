@@ -268,3 +268,15 @@ export interface CookingSessionState {
   /** Chat messages synced from PC Q&A panel */
   chat_messages?: Array<{ role: 'user' | 'assistant'; content: string }>
 }
+
+/* ──────────────────────────────────────────────
+   Auth types
+   ────────────────────────────────────────────── */
+
+export interface TokenPairResponse {
+  access_token: string
+  refresh_token: string
+  token_type: 'bearer'
+  access_token_expires_in: number
+  refresh_token_expires_in: number
+}

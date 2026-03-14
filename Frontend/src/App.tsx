@@ -1,4 +1,6 @@
-import { Routes, Route } from 'react-router-dom'
+import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
+import { useAuth } from './hooks/use-auth'
+import LoadingScreen from './pages/loading'
 import Home from './pages/home'
 import Results from './pages/results'
 import SearchPage from './pages/search'
@@ -12,16 +14,36 @@ import ChefRemotePage from './pages/chef-remote'
 import KitchenPage from './pages/kitchen'
 import Profile from './pages/profile'
 import Settings from './pages/settings'
+import LoginPage from './pages/login'
+import RegisterPage from './pages/register'
 import { Sidebar } from './components/layout/sidebar'
 
+const AUTH_ROUTES = ['/login', '/register']
+
 function App() {
+  const { isAuthenticated, loading } = useAuth()
+  const location = useLocation()
+
+  if (loading) return <LoadingScreen />
+
+  const isAuthPage = AUTH_ROUTES.includes(location.pathname)
+
+  if (!isAuthenticated && !isAuthPage) {
+    return <Navigate to="/login" replace state={{ from: location }} />
+  }
+
+  if (isAuthenticated && isAuthPage) {
+    return <Navigate to="/" replace />
+  }
+
   return (
     <>
-      {/* Global sidebar — rendered above all page content */}
-      <Sidebar />
+      {!isAuthPage && <Sidebar />}
 
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
         <Route path="/results" element={<Results />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/product-chat" element={<ProductChatPage />} />
@@ -40,4 +62,3 @@ function App() {
 }
 
 export default App
-
