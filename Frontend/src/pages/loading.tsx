@@ -17,7 +17,7 @@ export default function LoadingScreen() {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4 }}
-      className="fixed inset-0 flex flex-col items-center justify-center bg-[#080808] overflow-hidden"
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#080808] overflow-hidden"
     >
       {/* Ambient particles */}
       <div className="absolute inset-0 pointer-events-none">
@@ -119,7 +119,7 @@ export default function LoadingScreen() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6, duration: 0.8 }}
-        className="absolute bottom-7 text-[10px] text-white/12 font-sans text-center tracking-wide px-8"
+        className="absolute bottom-8 text-sm text-white/20 font-sans text-center tracking-wide px-8"
       >
         For educational purposes only. Not intended as medical advice.
       </motion.p>

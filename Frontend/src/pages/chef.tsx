@@ -52,8 +52,9 @@ import {
 import { QRCodeSVG } from 'qrcode.react'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
-import { searchQuery, chefParse, chatWithProduct, getAppConfig } from '@/lib/api'
+import { searchQuery, chefParse, chatWithProduct, getAppConfig, logCooked } from '@/lib/api'
 import { useHostWebSocket } from '@/hooks/use-host-websocket'
+import { useAuth } from '@/hooks/use-auth'
 import type {
   ChefIntentResponse,
   ChefParseResponse,
@@ -99,6 +100,27 @@ function formatMinutes(mins: number): string {
   const h = Math.floor(mins / 60)
   const m = mins % 60
   return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
+function normalizeChefRemoteBaseUrl(rawBaseUrl: string): string {
+  const trimmed = rawBaseUrl.trim()
+  if (!trimmed) return ''
+  try {
+    const url = new URL(trimmed)
+    const path = url.pathname.replace(/\/+$/, '')
+    if (!path || path === '/') {
+      url.pathname = '/chef-remote'
+    } else if (!path.endsWith('/chef-remote')) {
+      url.pathname = `${path}/chef-remote`
+    }
+    url.search = ''
+    url.hash = ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    const noTrail = trimmed.replace(/\/+$/, '')
+    if (noTrail.endsWith('/chef-remote')) return noTrail
+    return `${noTrail}/chef-remote`
+  }
 }
 
 /**
@@ -613,12 +635,14 @@ function StepTimeline({
 
 export default function ChefPage() {
   const location = useLocation()
+  const { isAuthenticated } = useAuth()
   const [phase, setPhase] = useState<Phase>('search')
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [chefData, setChefData] = useState<ChefParseResponse | null>(null)
   const [recipeContext, setRecipeContext] =
     useState<Record<string, unknown> | null>(null)
+  const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null)
 
   const [recipeOptions, setRecipeOptions] = useState<SearchResult[]>([])
 
@@ -694,6 +718,7 @@ export default function ChefPage() {
       )
       setPhase(hasStoredInstructions ? 'parsing' : 'generating')
       setError(null)
+      setActiveRecipeId(recipe.id)
 
       setRecipeContext({
         name: recipe.name,
@@ -945,6 +970,20 @@ export default function ChefPage() {
     }
   }, [qaMessages])
 
+  // -- Log cooked when session completes ------------------------------------
+
+  const cookedLoggedRef = useRef(false)
+
+  useEffect(() => {
+    if (phase === 'done' && activeRecipeId && isAuthenticated && !cookedLoggedRef.current) {
+      cookedLoggedRef.current = true
+      logCooked(activeRecipeId).catch(() => null)
+    }
+    if (phase !== 'done') {
+      cookedLoggedRef.current = false
+    }
+  }, [phase, activeRecipeId, isAuthenticated])
+
   // -- Reset -----------------------------------------------------------------
 
   const resetAll = useCallback(() => {
@@ -959,6 +998,8 @@ export default function ChefPage() {
     setTimerState(null)
     setQaMessages([])
     setQaInput('')
+    setActiveRecipeId(null)
+    cookedLoggedRef.current = false
     launchedRef.current = false
     submittingRef.current = false
   }, [])
@@ -967,20 +1008,32 @@ export default function ChefPage() {
   // -------------------------------------------------------------------
 
   const [remoteBaseUrl, setRemoteBaseUrl] = useState<string>(
-    import.meta.env.VITE_REMOTE_URL ?? ''
+    normalizeChefRemoteBaseUrl(import.meta.env.VITE_REMOTE_URL ?? '')
   )
 
   useEffect(() => {
     if (remoteBaseUrl) return
+
+    function originForPhone(): string {
+      const { hostname, port, protocol } = window.location
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        const lanIp = (import.meta.env.VITE_LAN_HOST as string | undefined)
+        if (lanIp) return `${protocol}//${lanIp}${port ? `:${port}` : ''}`
+      }
+      return window.location.origin
+    }
+
     getAppConfig()
       .then((cfg) => {
         setRemoteBaseUrl(
-          cfg.remote_base_url
-            ? `${cfg.remote_base_url.replace(/\/$/, '')}/chef-remote`
-            : `${window.location.origin}/chef-remote`
+          normalizeChefRemoteBaseUrl(
+            cfg.remote_base_url ? cfg.remote_base_url : originForPhone(),
+          ),
         )
       })
-      .catch(() => setRemoteBaseUrl(`${window.location.origin}/chef-remote`))
+      .catch(() =>
+        setRemoteBaseUrl(normalizeChefRemoteBaseUrl(originForPhone())),
+      )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

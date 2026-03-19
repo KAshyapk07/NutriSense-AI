@@ -15,6 +15,7 @@ from Backend.dependencies import neo4j as neo4j_dep  # noqa: E402
 from Backend.dependencies import model as model_dep  # noqa: E402
 from Backend.dependencies import router as router_dep  # noqa: E402
 from Backend.dependencies import graph_rag as graph_rag_dep  # noqa: E402
+from Backend.dependencies import recommender as recommender_dep  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +29,22 @@ async def lifespan(app: FastAPI):
     logger.info("Upload directory ready: %s", settings.upload_dir)
 
     neo4j_dep.init()
+    # Create indexes/constraints for efficient interaction tracking (idempotent)
+    try:
+        neo4j_dep.get_neo4j_client().ensure_indexes()
+        logger.info("Neo4j indexes verified / created.")
+    except Exception as exc:
+        logger.warning("Non-fatal: could not ensure Neo4j indexes: %s", exc)
     model_dep.init()
 
     # Phase 3 — GraphRAG: initialise embedding model + vector search service
     graph_rag_dep.init(neo4j_dep.get_neo4j_client())
+
+    # Phase 6.5 — Recommender engine (shares embedding model from GraphRAGService)
+    recommender_dep.init(
+        neo4j_dep.get_neo4j_client(),
+        embedding_model=graph_rag_dep.get_graph_rag_service()._model,
+    )
 
     router_dep.init()
 

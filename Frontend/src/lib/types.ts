@@ -99,6 +99,7 @@ export interface SearchResult {
   id: string
   name: string
   cluster: 'recipe' | 'product'
+  interaction_state?: 'liked' | 'disliked' | null
   vector_score: number
   graph_score: number
   final_score: number
@@ -279,4 +280,51 @@ export interface TokenPairResponse {
   token_type: 'bearer'
   access_token_expires_in: number
   refresh_token_expires_in: number
+}
+
+/* ──────────────────────────────────────────────
+   Phase 6.5 — User Graph types
+   Mirroring Backend/schemas/users.py
+   ────────────────────────────────────────────── */
+
+export interface FoodCardData {
+  id: string
+  name: string
+  cluster: 'recipe' | 'product'
+  interaction_state?: 'liked' | 'disliked' | null
+  is_filler?: boolean
+  food_name?: string | null
+  cuisine?: string | null
+  calories?: number | null
+  protein?: number | null
+  carbohydrates?: number | null
+  fats?: number | null
+  fibre?: number | null
+  prep_time_mins?: number | null
+  brand?: string | null
+  category?: string | null
+  cooked_at?: string | null
+  rating?: number | null
+}
+
+export interface RecommendationResponse {
+  items: FoodCardData[]
+  cold_start: boolean
+  cluster: string
+  total: number
+}
+
+export interface CookedResponse {
+  items: FoodCardData[]
+  total: number
+}
+
+export interface InteractionStateItem {
+  id: string
+  cluster: 'recipe' | 'product'
+  state: 'liked' | 'disliked'
+}
+
+export interface InteractionStatesResponse {
+  items: InteractionStateItem[]
 }

@@ -1,4 +1,4 @@
-# Dataset images (several GB, download separately from Kaggle)
+# Dataset images 
 Dataset/Images/
 Dataset/raw/
 Dataset/processed/
@@ -63,8 +63,5 @@ PROJECT_STATUS_AND_ROADMAP.md
 
 # Legacy
 structure
-
-# Cursor IDE rules (local only — contains full architectural context)
-.cursorrules
 
 Backend/core/firebase-adminsdk.json

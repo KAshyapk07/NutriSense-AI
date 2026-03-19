@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react'
 import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import { useAuth } from './hooks/use-auth'
 import LoadingScreen from './pages/loading'
 import Home from './pages/home'
@@ -24,20 +26,47 @@ function App() {
   const { isAuthenticated, loading } = useAuth()
   const location = useLocation()
 
-  if (loading) return <LoadingScreen />
+  const [minSplashDone, setMinSplashDone] = useState(false)
 
-  const isAuthPage = AUTH_ROUTES.includes(location.pathname)
+  useEffect(() => {
+    const timer = setTimeout(() => setMinSplashDone(true), 3000)
+    return () => clearTimeout(timer)
+  }, [])
 
-  if (!isAuthenticated && !isAuthPage) {
+  const path = location.pathname.replace(/\/+$/, '') || '/'
+
+  // ── Chef Remote: completely separate flow, no auth ──
+  // Phone scans QR → splash for 3s → chef-remote UI. Zero auth dependency.
+  if (path.startsWith('/chef-remote')) {
+    return (
+      <>
+        <AnimatePresence>
+          {!minSplashDone && <LoadingScreen />}
+        </AnimatePresence>
+        <ChefRemotePage />
+      </>
+    )
+  }
+
+  // ── PC / main app flow ──
+  const isAuthPage = AUTH_ROUTES.includes(path)
+  const authReady = !loading
+  const showSplash = !isAuthPage && (!minSplashDone || !authReady)
+
+  if (!showSplash && !isAuthenticated && !isAuthPage) {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  if (isAuthenticated && isAuthPage) {
+  if (!showSplash && isAuthenticated && isAuthPage) {
     return <Navigate to="/" replace />
   }
 
   return (
     <>
+      <AnimatePresence>
+        {showSplash && <LoadingScreen />}
+      </AnimatePresence>
+
       {!isAuthPage && <Sidebar />}
 
       <Routes>

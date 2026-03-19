@@ -9,6 +9,10 @@ import type {
   ChefIntentRequest,
   ChefIntentResponse,
   TokenPairResponse,
+  RecommendationResponse,
+  CookedResponse,
+  FoodCardData,
+  InteractionStatesResponse,
 } from './types'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
@@ -176,6 +180,107 @@ export async function chefIntent(body: ChefIntentRequest): Promise<ChefIntentRes
 
   return res.json()
 }
+
+// ── Phase 6.5 — User Graph API ────────────────────────────────────────────────
+
+export async function getRecommendations(params?: {
+  cluster?: 'all' | 'recipe' | 'product'
+  limit?: number
+}): Promise<RecommendationResponse> {
+  const p = new URLSearchParams()
+  if (params?.cluster) p.set('cluster', params.cluster)
+  if (params?.limit) p.set('limit', String(params.limit))
+  const res = await apiFetch(`/users/me/recommendations?${p.toString()}`)
+  if (!res.ok) return { items: [], cold_start: true, cluster: 'all', total: 0 }
+  return res.json()
+}
+
+export async function getCookedHistory(params?: {
+  limit?: number
+}): Promise<CookedResponse> {
+  const p = new URLSearchParams()
+  if (params?.limit) p.set('limit', String(params.limit))
+  const res = await apiFetch(`/users/me/cooked?${p.toString()}`)
+  if (!res.ok) return { items: [], total: 0 }
+  return res.json()
+}
+
+export async function logViewed(itemId: string, cluster: 'recipe' | 'product'): Promise<void> {
+  const res = await apiFetch(`/users/me/viewed/${encodeURIComponent(itemId)}?cluster=${cluster}`, { method: 'POST' })
+  if (!res.ok) await readErrorAndThrow(res)
+}
+
+export async function logLiked(itemId: string, cluster: 'recipe' | 'product'): Promise<'liked' | 'disliked' | null> {
+  const res = await apiFetch(`/users/me/liked/${encodeURIComponent(itemId)}?cluster=${cluster}`, { method: 'POST' })
+  if (!res.ok) await readErrorAndThrow(res)
+  const data = await res.json()
+  return (data.state ?? 'liked') as 'liked' | 'disliked' | null
+}
+
+export async function logUnliked(itemId: string, cluster: 'recipe' | 'product'): Promise<'liked' | 'disliked' | null> {
+  const res = await apiFetch(`/users/me/liked/${encodeURIComponent(itemId)}?cluster=${cluster}`, { method: 'DELETE' })
+  if (!res.ok) await readErrorAndThrow(res)
+  const data = await res.json()
+  return (data.state ?? null) as 'liked' | 'disliked' | null
+}
+
+export async function logDisliked(itemId: string, cluster: 'recipe' | 'product'): Promise<'liked' | 'disliked' | null> {
+  const res = await apiFetch(`/users/me/disliked/${encodeURIComponent(itemId)}?cluster=${cluster}`, { method: 'POST' })
+  if (!res.ok) await readErrorAndThrow(res)
+  const data = await res.json()
+  return (data.state ?? 'disliked') as 'liked' | 'disliked' | null
+}
+
+export async function logUndisliked(itemId: string, cluster: 'recipe' | 'product'): Promise<'liked' | 'disliked' | null> {
+  const res = await apiFetch(`/users/me/disliked/${encodeURIComponent(itemId)}?cluster=${cluster}`, { method: 'DELETE' })
+  if (!res.ok) await readErrorAndThrow(res)
+  const data = await res.json()
+  return (data.state ?? null) as 'liked' | 'disliked' | null
+}
+
+export async function getInteractionStates(
+  items: Array<{ id: string; cluster: 'recipe' | 'product' }>,
+): Promise<InteractionStatesResponse> {
+  if (items.length === 0) return { items: [] }
+  const params = new URLSearchParams()
+  for (const item of items) {
+    params.append('item', `${item.cluster}:${item.id}`)
+  }
+  const res = await apiFetch(`/users/me/interactions?${params.toString()}`)
+  if (!res.ok) return { items: [] }
+  return res.json()
+}
+
+export async function logCooked(recipeId: string, rating?: number): Promise<void> {
+  await apiFetch(`/users/me/cooked/${recipeId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(rating != null ? { rating } : {}),
+  })
+}
+
+export async function getAllergenTags(): Promise<string[]> {
+  const res = await apiFetch('/users/me/allergen-tags')
+  if (!res.ok) return []
+  return res.json()
+}
+
+export async function setUserPreferences(data: {
+  cuisines: string[]
+  health_tags: string[]
+  health_goal?: string | null
+}): Promise<void> {
+  const res = await apiFetch('/users/me/preferences', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) await readErrorAndThrow(res)
+}
+
+export { type FoodCardData }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function loginWithFirebaseToken(firebaseIdToken: string): Promise<TokenPairResponse> {
   const res = await fetch(`${API_BASE}/auth/login`, {

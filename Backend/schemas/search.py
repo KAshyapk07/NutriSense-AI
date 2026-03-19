@@ -9,6 +9,7 @@ class SearchResult(BaseModel):
     id: str
     name: str
     cluster: Literal["recipe", "product"]
+    interaction_state: Optional[Literal["liked", "disliked"]] = None
     vector_score: float = Field(0.0, description="Cosine similarity [0, 1]")
     graph_score:  float = Field(0.0, description="HealthTag match ratio [0, 1]")
     final_score:  float = Field(0.0, description="Weighted combined score")

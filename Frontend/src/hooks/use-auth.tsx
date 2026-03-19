@@ -43,6 +43,7 @@ interface AuthContextValue {
   logout: () => void
   loading: boolean
   isAuthenticated: boolean
+  hasBackendSession: boolean
 }
 
 const STORAGE_KEY = 'nutrisense-user'
@@ -89,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const bootDone = useRef(false)
   const refreshInFlight = useRef<Promise<string | null> | null>(null)
+  const backendSyncInFlight = useRef(false)
 
   const persistUser = useCallback((authUser: AuthUser | null) => {
     if (!authUser) {
@@ -182,6 +184,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => configureAuthApi(null)
   }, [accessToken, refreshAccessToken])
 
+  // If Firebase session exists but backend token exchange previously failed
+  // (for example backend was temporarily unavailable), auto-heal in background.
+  useEffect(() => {
+    if (loading || accessToken || backendSyncInFlight.current) return
+    const fbUser = firebaseAuth.currentUser
+    if (!fbUser) return
+
+    backendSyncInFlight.current = true
+    ;(async () => {
+      try {
+        const idToken = await fbUser.getIdToken()
+        await exchangeFirebaseToken(idToken)
+      } catch {
+        // keep local Firebase session; we'll retry on focus/visibility
+      } finally {
+        backendSyncInFlight.current = false
+      }
+    })()
+  }, [loading, accessToken, exchangeFirebaseToken])
+
+  useEffect(() => {
+    const retryBackendSync = async () => {
+      if (loading || accessToken || backendSyncInFlight.current) return
+      const fbUser = firebaseAuth.currentUser
+      if (!fbUser) return
+
+      backendSyncInFlight.current = true
+      try {
+        const idToken = await fbUser.getIdToken()
+        await exchangeFirebaseToken(idToken)
+      } catch {
+        // no-op
+      } finally {
+        backendSyncInFlight.current = false
+      }
+    }
+
+    const onFocus = () => {
+      void retryBackendSync()
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void retryBackendSync()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [loading, accessToken, exchangeFirebaseToken])
+
   // ── Public auth actions ────────────────────────────────────────────────────
 
   const loginWithEmail = useCallback(async (email: string, password: string) => {
@@ -247,7 +301,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     loading,
     isAuthenticated: !!user,
-  }), [user, loginWithEmail, registerWithEmail, signInWithGoogle, logout, loading])
+    hasBackendSession: !!accessToken,
+  }), [user, loginWithEmail, registerWithEmail, signInWithGoogle, logout, loading, accessToken])
 
   return (
     <AuthContext.Provider value={value}>

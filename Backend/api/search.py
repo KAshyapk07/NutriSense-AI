@@ -9,12 +9,15 @@ GET /search
     &limit=10                             (default: 10, max: 50)
 """
 
+import asyncio
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
+from Backend.dependencies.auth_user import get_optional_user
 from Backend.dependencies.graph_rag import get_graph_rag_service
+from Backend.dependencies.neo4j import get_neo4j_client
 from Backend.schemas.search import SearchResponse, SearchResult
 
 logger = logging.getLogger(__name__)
@@ -23,6 +26,7 @@ router = APIRouter(tags=["Search"])
 
 @router.get("/search", response_model=SearchResponse)
 async def semantic_search(
+    background_tasks: BackgroundTasks,
     q: str = Query(..., min_length=1, description="Natural language search query"),
     cluster: str = Query(
         "all",
@@ -40,6 +44,8 @@ async def semantic_search(
     ),
     limit: int = Query(10, ge=1, le=50, description="Max results (1–50)"),
     rag_service=Depends(get_graph_rag_service),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_user),
+    neo4j_client=Depends(get_neo4j_client),
 ):
     """
     Hybrid semantic search across the food knowledge graph.
@@ -86,11 +92,53 @@ async def semantic_search(
         except Exception as exc:
             logger.warning("Skipping malformed search result: %s — %s", r.get("name"), exc)
 
+    # Attach persisted like/dislike state for authenticated users so the
+    # frontend can render prior reactions on revisit/search.
+    if current_user and results:
+        uid = current_user["uid"]
+        recipe_ids = [r.id for r in results if r.cluster == "recipe"]
+        product_ids = [r.id for r in results if r.cluster == "product"]
+        try:
+            states = await asyncio.to_thread(
+                neo4j_client.get_user_preference_states,
+                uid,
+                recipe_ids,
+                product_ids,
+            )
+            state_map = {
+                (s["cluster"], str(s["id"])): s["state"]
+                for s in states
+                if s.get("state") in {"liked", "disliked"}
+            }
+            for r in results:
+                r.interaction_state = state_map.get((r.cluster, str(r.id)))
+        except Exception as exc:
+            logger.warning("Failed to hydrate interaction states for uid=%s: %s", uid, exc)
+
     # Surface available health tags for the UI
     try:
         available_tags = rag_service.get_all_health_tags()
     except Exception:
         available_tags = []
+
+    # Passive interaction logging for authenticated users (fire-and-forget)
+    if current_user:
+        uid = current_user["uid"]
+        background_tasks.add_task(
+            neo4j_client.log_search_event,
+            uid=uid,
+            query=q.strip(),
+            cluster=cluster,
+            result_found=len(results) > 0,
+        )
+        if results:
+            top = results[0]
+            background_tasks.add_task(
+                neo4j_client.log_viewed,
+                uid=uid,
+                item_id=top.id,
+                cluster=top.cluster,
+            )
 
     return SearchResponse(
         query=q.strip(),

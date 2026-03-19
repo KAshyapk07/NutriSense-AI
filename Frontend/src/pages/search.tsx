@@ -1,14 +1,14 @@
-﻿/**
- * Search page  GraphRAG semantic search with filters.
+/**
+ * Search page — semantic search with filters.
  *
  * Route: /search?q=<query>
  * Features:
  * - Table-style nutrition cards grouped by Recipes and Products
  * - 3 results shown initially per cluster; "See more" expands to ~15
- * - Filter panel (cluster toggle + allergen pills)
+ * - Filter panel (cluster toggle + health-tag pills + allergen pills)
  * - "Ask AI" navigates to a dedicated chat page
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -20,7 +20,9 @@ import { FilterPanel } from '@/components/ui/filter-panel'
 import { SearchResultCard } from '@/components/ui/search-result-card'
 import { SkeletonLoader } from '@/components/ui/skeleton-loader'
 import { useSemanticSearch } from '@/hooks/use-semantic-search'
+import { useAuth } from '@/hooks/use-auth'
 import { usePreferences } from '@/hooks/use-preferences'
+import { getInteractionStates } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { SearchFilters, SearchResult } from '@/lib/types'
 
@@ -67,6 +69,7 @@ function SectionHeading({
 export default function SearchPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const { loading: authLoading, isAuthenticated, hasBackendSession } = useAuth()
   const { prefs } = usePreferences()
 
   const q = searchParams.get('q') ?? ''
@@ -74,15 +77,18 @@ export default function SearchPage() {
   const { loading, response, error, search, reset } = useSemanticSearch()
   const [filters, setFilters] = useState<SearchFilters>(() => ({
     cluster: 'all',
-    healthTags: prefs.activeDiets,
+    // Health tags are NOT auto-applied from preferences — users choose them
+    // explicitly via the filter panel so no over-restrictive AND-filter surprises.
+    healthTags: [],
+    // Allergen exclusions ARE applied automatically — safety-critical.
     excludeAllergens: prefs.excludeAllergens,
     limit: 50,
   }))
   const [showFilters, setShowFilters] = useState(false)
   const [showAllRecipes, setShowAllRecipes] = useState(false)
   const [showAllProducts, setShowAllProducts] = useState(false)
+  const [interactionOverrides, setInteractionOverrides] = useState<Record<string, 'liked' | 'disliked' | null>>({})
 
-  /* -- Run search whenever query or filters change -- */
   const runSearch = useCallback(
     (query: string, f: SearchFilters) => {
       if (!query.trim()) return
@@ -91,15 +97,47 @@ export default function SearchPage() {
     [search],
   )
 
+  // Track whether the initial mount search has already run so the filters
+  // effect only fires on genuine user-driven filter changes, not on mount.
+  const didMountSearch = useRef(false)
+
   useEffect(() => {
-    if (q) runSearch(q, filters)
+    if (q) {
+      runSearch(q, filters)
+      didMountSearch.current = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q])
 
   useEffect(() => {
+    if (!didMountSearch.current) return
     if (q) runSearch(q, filters)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters])
+
+  useEffect(() => {
+    if (!q || authLoading) return
+    // Re-hydrate interaction_state once backend session is ready (post login/refresh).
+    if (hasBackendSession) runSearch(q, filters)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, hasBackendSession, q])
+
+  useEffect(() => {
+    if (!isAuthenticated || !response?.results?.length) return
+    const items = response.results.map((r) => ({ id: String(r.id), cluster: r.cluster }))
+    getInteractionStates(items)
+      .then((payload) => {
+        if (!payload.items.length) return
+        setInteractionOverrides((prev) => {
+          const next = { ...prev }
+          for (const row of payload.items) {
+            next[`${row.cluster}:${row.id}`] = row.state
+          }
+          return next
+        })
+      })
+      .catch(() => null)
+  }, [isAuthenticated, response?.results])
 
   const handleNewSearch = (query: string) => {
     reset()
@@ -115,6 +153,17 @@ export default function SearchPage() {
   const handleOpenChat = (result: SearchResult) => {
     navigate('/product-chat', { state: { result } })
   }
+
+  const handleCardInteraction = useCallback((
+    itemId: string,
+    cluster: 'recipe' | 'product',
+    interactionState: 'liked' | 'disliked' | null,
+  ) => {
+    setInteractionOverrides((prev) => ({
+      ...prev,
+      [`${cluster}:${itemId}`]: interactionState,
+    }))
+  }, [])
 
   /* -- No query -> empty prompt -- */
   if (!q) {
@@ -133,8 +182,13 @@ export default function SearchPage() {
   }
 
   const results = response?.results ?? []
-  const allRecipeResults = results.filter((r) => r.cluster === 'recipe')
-  const allProductResults = results.filter((r) => r.cluster === 'product')
+  const resultsWithOverrides = results.map((r) => {
+    const override = interactionOverrides[`${r.cluster}:${r.id}`]
+    if (override === undefined) return r
+    return { ...r, interaction_state: override }
+  })
+  const allRecipeResults = resultsWithOverrides.filter((r) => r.cluster === 'recipe')
+  const allProductResults = resultsWithOverrides.filter((r) => r.cluster === 'product')
   const recipeResults = showAllRecipes
     ? allRecipeResults.slice(0, EXPANDED_PER_CLUSTER)
     : allRecipeResults.slice(0, INITIAL_PER_CLUSTER)
@@ -156,24 +210,12 @@ export default function SearchPage() {
               <span className="text-[var(--color-text-muted)] font-normal">&ldquo;{q}&rdquo;</span>
             </h1>
             {response && !loading && (
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <span className="text-sm text-[var(--color-text-muted)]">
-                  Showing {displayedTotal} of {response.total} result{response.total !== 1 ? 's' : ''}
-                  {filters.cluster === 'all' && displayedTotal > 0 && (
-                    <> &mdash; {recipeResults.length} recipes, {productResults.length} products</>
-                  )}
-                </span>
-                {response.vector_search_used && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-500">
-                    GraphRAG
-                  </span>
+              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                Showing {displayedTotal} of {response.total} result{response.total !== 1 ? 's' : ''}
+                {filters.cluster === 'all' && displayedTotal > 0 && (
+                  <> &mdash; {recipeResults.length} recipes, {productResults.length} products</>
                 )}
-                {!response.vector_search_used && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-text-muted)]">
-                    Full-text
-                  </span>
-                )}
-              </div>
+              </p>
             )}
           </div>
 
@@ -254,6 +296,7 @@ export default function SearchPage() {
                       result={result}
                       index={i}
                       onChat={handleOpenChat}
+                      onInteractionChange={handleCardInteraction}
                     />
                   ))}
                 </div>
@@ -291,6 +334,7 @@ export default function SearchPage() {
                       result={result}
                       index={i}
                       onChat={handleOpenChat}
+                      onInteractionChange={handleCardInteraction}
                     />
                   ))}
                 </div>

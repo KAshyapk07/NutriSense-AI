@@ -1,11 +1,13 @@
 import logging
 import os
 import uuid
-from typing import Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 
 from Backend.core.config import settings
+from Backend.dependencies.auth_user import get_optional_user
+from Backend.dependencies.neo4j import get_neo4j_client
 from Backend.dependencies.router import get_router
 from Backend.schemas.process import ProcessResponse
 
@@ -20,9 +22,12 @@ def _validate_extension(filename: str) -> bool:
 
 @router.post("/process", response_model=ProcessResponse)
 async def process(
+    background_tasks: BackgroundTasks,
     query: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     nutri_router=Depends(get_router),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_user),
+    neo4j_client=Depends(get_neo4j_client),
 ):
     has_query = query and query.strip()
     has_image = image is not None and image.filename
@@ -64,6 +69,23 @@ async def process(
             text_query=query or "",
             image_input=image_path,
         )
+
+        # Passive SearchEvent logging for authenticated users
+        if current_user and query and query.strip():
+            uid = current_user["uid"]
+            result_found = (
+                result.get("status") not in ("NOT_FOUND", "ERROR")
+                if isinstance(result, dict)
+                else True
+            )
+            background_tasks.add_task(
+                neo4j_client.log_search_event,
+                uid=uid,
+                query=query.strip(),
+                cluster="recipe",
+                result_found=result_found,
+            )
+
         return result
 
     except HTTPException:
