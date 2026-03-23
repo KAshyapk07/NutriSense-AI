@@ -1,10 +1,13 @@
-# NutriSense-AI
+# NutriSense-AI — Comprehensive Project Status & Roadmap
 
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![TensorFlow](https://img.shields.io/badge/TensorFlow-Keras-orange)
-![Flask](https://img.shields.io/badge/Flask-2.3+-lightgrey)
-![LLM](https://img.shields.io/badge/LLM-LlaMa%203.2-blueviolet)
-![EfficientNet](https://img.shields.io/badge/Model-EfficientNet--B4-green)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688)
+![React](https://img.shields.io/badge/React-18+-61DAFB)
+![Neo4j](https://img.shields.io/badge/Neo4j-Graph-blue)
+![Pytest](https://img.shields.io/badge/Pytest-Passing-success)
+![LLM](https://img.shields.io/badge/LLM-Ollama%203.2-blueviolet)
+![ConvNeXt](https://img.shields.io/badge/Model-ConvNeXt--Small-green)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 
@@ -39,7 +42,7 @@ The system unifies multiple data sources and AI techniques to provide:
 - Multi-recipe comparison with optional nutritional summaries
 - Fallback LLM estimation for out-of-database queries
 
-## Why This Matters:
+## Why This Matters
 
 - Domain Gap: Indian cuisines are underrepresented in commercial nutrition APIs
 - Data Fusion: Unified heterogeneous datasets using custom fuzzy matching (Nutritional values + Cooking methods/Ingredients)
@@ -73,9 +76,10 @@ The system unifies multiple data sources and AI techniques to provide:
 ### 4. Image Classification (Pathway 4)
 
 - Upload food images for automatic dish recognition
-- **EfficientNet-B4** trained on **148 classes Indian food image dataset**
-- Classified dishes automatically routed through Pathway 1
-- Top-3 accuracy: 85.20%
+- **ConvNeXt-Small** (timm `convnext_small.fb_in22k_ft_in1k`) fine-tuned on a **148-class Indian food image dataset**
+- Returns top-3 predictions; each candidate is looked up in the database in order and the first hit is returned with the full nutritional profile
+- All three image predictions are attached to the response under `meta.image_predictions`
+- Top-1 accuracy: 86.98% | Top-3 accuracy: 97.10% | Top-5 accuracy: 98.49%
 
 ### 5. Router 
 
@@ -129,10 +133,10 @@ The unified dataset contains
 
 ### 2. The Image Dataset 
 
-This dataset is used to train the image classification model (Efficientnet B4) for Indian food classification.
-**The dataset contains 20136 images with 148 classes**. The dataset was divided into training(16,109) and validation (4027).
+This dataset is used to train the image classification model (ConvNeXt-Small) for Indian food classification.
+**The dataset contains 20136 images across 148 classes**. The dataset is split into train (75%), validation (15%), and test (10%) sets using stratified sampling.
 
-***Image Dataset*** : [Indian Food Dataset - cleaned](https://www.kaggle.com/datasets/dipanshukalra/food-dataset-cleaned)
+***Image Dataset*** : [Indian Food Images for Model Fine-Tuning 2026](https://www.kaggle.com/datasets/kashyap077/indian-food-images-for-model-fine-tuning-2026)
 **This dataset was not uploaded into the repo due to very large size**
 
 ## Installation 
@@ -140,9 +144,9 @@ This dataset is used to train the image classification model (Efficientnet B4) f
 ### Prerequisites:
 
 - Python 3.9+
-- PyTorch 2.0+
-- TensorFlow/Keras (for data preprocessing)
-- Flask 2.3+
+- Neo4j Desktop (local) or AuraDB
+- Node.js (for React frontend)
+- Ollama (for local LLM)
 
 ```bash
 # Clone the repository
@@ -163,33 +167,41 @@ pip install -r requirements.txt
 ```
 ### Usage
 
-Run the application
+**1. Start the Backend (FastAPI)**
 ```bash
-python main.py
+python run.py
+```
+
+**2. Start the Frontend (React)**
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 ## Tech Stack
 
-- Python : Core programming language
-- Rapidfuzz : Fuzzy matching
-- Tensorflow/Keras : Image Classification model training
-- LLM integration : Llama 3.2 with 3B parameters
-- Image Training model: EfficientNet B4
-- Flask : Backend API work
-- Numpy : Numerical computations
-- Pandas : Data manipulation and analysis
+- **Backend**: FastAPI, Python 3.9+
+- **Frontend**: React, Vite, Tailwind CSS
+- **Database**: Neo4j (Knowledge Graph)
+- **AI/ML**: Ollama (Llama 3.2 local inference), ConvNeXt-Small via timm (Image Classification)
+- **Data Validation**: Pydantic (Structured LLM Outputs)
+- **Testing**: Pytest, Pytest-Asyncio (116+ tests)
+- **Fuzzy Matching**: RapidFuzz
 
 ## Model Performance
 
-The image classification model was fine-tuned from a pre-trained EfficientNet-B4 architecture on the Indian food image dataset.
-The dataset was split into 80% training (16,109 images) and 20% validation (4,027 images).
+The image classification model is a ConvNeXt-Small backbone (pretrained on ImageNet-22k, fine-tuned on ImageNet-1k via timm) with a custom classification head trained for 50 epochs on the Indian food image dataset. Training used Mixup/CutMix augmentation, EMA, cosine LR schedule with linear warmup, and stochastic depth.
 
-#### Validation Performance
+#### Test-Set Performance (best checkpoint — epoch 49)
 
-- Top-1 accuracy: 67.97%
-- Top-3 accuracy: 85.20%
-- Macro F1: 67.96%
-- Micro F1: 67.97%
+- Top-1 accuracy: 86.98%
+- Top-3 accuracy: 97.10%
+- Top-5 accuracy: 98.49%
+- Macro F1: 0.7740
+- Weighted F1: 0.8756
+- Best validation accuracy: 87.34%
+- Training time: ~528 minutes (2x GPU)
 
 ## Blogs 
 
@@ -203,12 +215,12 @@ I documented the key technical components of this project in detailed blog posts
 
 ## Future Enhancements
 
-- Portion size estimation: ML model to estimate portion from image.
-- Add meal planning and recommendation features.
-- Multi-language support.
-- Expand dataset.
-- User meal logging: Track daily nutrition intake across multiple meals
-- System Evaluation
+- **Phase 3: GraphRAG & Vector Search**: Hybrid retrieval using vector embeddings and graph structure.
+- **Phase 4: React Frontend Upgrade**: Complete the transition to a modern React UI.
+- **Phase 5: AI Chef Agent**: Interactive step-by-step cooking companion.
+- **Phase 6: Authentication & User Graph**: Personalized recommendations and history tracking.
+- **Phase 7: AI & ML Enhancements**: Data augmentation, fine-tuning, and RAG exploration.
+- **Phase 8: Production & Deployment**: Docker containerization, cloud deployment, and CI/CD.
 
 ## Author
 

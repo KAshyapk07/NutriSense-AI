@@ -1,54 +1,87 @@
-# Src/Image_classifier/inference.py
-import tensorflow as tf
-import numpy as np
-import json
 import os
-from tensorflow import keras
-from keras.utils import load_img, img_to_array
 
-def load_meta(meta_path):
-    with open(meta_path, 'r') as f:
-        return json.load(f)
+import torch
+import torch.nn as nn
+import torchvision.transforms as T
+from PIL import Image
+import timm
 
-def load_model_and_meta(model_path, meta_path):
-    meta = load_meta(meta_path)
-    # load model without compiling (faster if you only infer)
-    model = tf.keras.models.load_model(model_path, compile=False)
-    return model, meta
+_INFERENCE_TRANSFORM = T.Compose([
+    T.Resize(256),
+    T.CenterCrop(224),
+    T.ToTensor(),
+    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
 
-def preprocess_image(img_path, img_size):
-    # uses tf.keras.utils.load_img / img_to_array
-    img = load_img(img_path, target_size=(img_size, img_size))
-    arr = img_to_array(img)  # shape (H,W,3)
-    arr = np.expand_dims(arr, axis=0)  # (1,H,W,3)
-    # apply model-specific preprocessing (EfficientNet expects preprocess_input)
-    arr = tf.keras.applications.efficientnet.preprocess_input(arr)
-    return arr
+DEFAULT_MODEL_PATH = os.path.join(
+    os.path.dirname(__file__), "models", "nutrisense_convnext_small_best.pth"
+)
 
-def predict_image(model, meta, img_path, top_k=1):
-    img_size = meta.get('img_size', 380)
-    class_names = meta['class_names']
-    x = preprocess_image(img_path, img_size)
-    preds = model.predict(x)
-    top_indices = preds[0].argsort()[-top_k:][::-1]
-    results = []
-    for idx in top_indices:
-        results.append({
-            'label_index': int(idx),
-            'label': class_names[idx],
-            'score': float(preds[0][idx])
-        })
-    return results
 
-if __name__ == '__main__':
+def _build_convnext(num_classes: int) -> nn.Module:
+    model = timm.create_model(
+        "convnext_small.fb_in22k_ft_in1k",
+        pretrained=False,
+        drop_path_rate=0.2,
+    )
+    in_features = model.head.fc.in_features
+    model.head.fc = nn.Sequential(
+        nn.LayerNorm(in_features),
+        nn.Dropout(p=0.3),
+        nn.Linear(in_features, 512),
+        nn.GELU(),
+        nn.Dropout(p=0.2),
+        nn.Linear(512, num_classes),
+    )
+    return model
+
+
+def load_model(model_path: str = DEFAULT_MODEL_PATH, device: str | None = None):
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    ckpt = torch.load(model_path, map_location="cpu", weights_only=False)
+    class_names = list(ckpt["class_names"])
+    model = _build_convnext(len(class_names))
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.to(device)
+    model.eval()
+    return model, class_names, device
+
+
+def predict_image(
+    model: nn.Module,
+    class_names: list,
+    device: str,
+    img_path: str,
+    top_k: int = 3,
+) -> list[dict]:
+    img = Image.open(img_path).convert("RGB")
+    tensor = _INFERENCE_TRANSFORM(img).unsqueeze(0).to(device)
+    with torch.no_grad():
+        logits = model(tensor)
+        probs = torch.softmax(logits, dim=1)[0]
+    k = min(top_k, len(class_names))
+    top_probs, top_indices = torch.topk(probs, k)
+    return [
+        {
+            "label_index": int(idx.item()),
+            "label": class_names[idx.item()],
+            "score": float(prob.item()),
+        }
+        for idx, prob in zip(top_indices, top_probs)
+    ]
+
+
+if __name__ == "__main__":
     import argparse
+
     p = argparse.ArgumentParser()
-    p.add_argument('--model_path', required=True)
-    p.add_argument('--meta_path', required=True)
-    p.add_argument('--img', required=True)
-    p.add_argument('--top_k', type=int, default=1)
+    p.add_argument("--model_path", default=DEFAULT_MODEL_PATH)
+    p.add_argument("--img", required=True)
+    p.add_argument("--top_k", type=int, default=3)
     args = p.parse_args()
 
-    model, meta = load_model_and_meta(args.model_path, args.meta_path)
-    res = predict_image(model, meta, args.img, top_k=args.top_k)
-    print(res)
+    _model, _class_names, _device = load_model(args.model_path)
+    results = predict_image(_model, _class_names, _device, args.img, top_k=args.top_k)
+    for r in results:
+        print(f"  {r['label']:30s}  {r['score']*100:.2f}%")

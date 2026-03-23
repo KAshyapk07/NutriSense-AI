@@ -1,5 +1,4 @@
 import re
-import pandas as pd
 from rapidfuzz import fuzz, process
 
 MIN_COMPOSITE_SCORE = 75
@@ -57,84 +56,99 @@ def to_python_type(x):
     return x
 
 
-def pathway_1_lookup(recipe_name: str, df: pd.DataFrame):
+# Maps Neo4j snake_case property names to human-readable display keys
+# to keep backward compatibility with LLM prompts and the frontend.
+NUTRITION_FIELD_MAP = {
+    "calories":       "Calories (kcal)",
+    "carbohydrates":  "Carbohydrates (g)",
+    "protein":        "Protein (g)",
+    "fats":           "Fats (g)",
+    "free_sugar":     "Free Sugar (g)",
+    "fibre":          "Fibre (g)",
+    "sodium":         "Sodium (mg)",
+    "calcium":        "Calcium (mg)",
+    "iron":           "Iron (mg)",
+    "vitamin_c":      "Vitamin C (mg)",
+    "folate":         "Folate (µg)",
+}
+
+
+def pathway_1_lookup(recipe_name: str, neo4j_client) -> dict:
     """
-    Pathway 1 (Multi-output):
-    - Input: extracted recipe name
-    - Output: list of full dataset-backed results
+    Pathway 1 (Multi-output) — Neo4j-backed.
+    - Input : extracted recipe name + an initialised Neo4jClient
+    - Output: {status: FOUND|NOT_FOUND, results: [...]}
+    Output contract is identical to the previous pandas version.
     """
+    query_clean = clean_minimal(recipe_name)
 
-    query = recipe_name.lower().strip()
+    # Stage 1: fetch all recipe names from Neo4j
+    all_recipes = neo4j_client.get_all_recipe_names()
+    if not all_recipes:
+        return {"status": "NOT_FOUND", "results": []}
 
-    NAME_COL = "best_match_clean"
-    DISPLAY_COL = "final_food_name"
+    # Build mapping: clean_name -> original_name (needed for get_recipe_by_name)
+    name_map: dict = {}
+    for r in all_recipes:
+        original = r.get("name", "")
+        clean = clean_minimal(original)
+        if clean:
+            name_map[clean] = original
 
-    choices = df[NAME_COL].astype(str).tolist()
+    clean_names = list(name_map.keys())
 
-    candidates = process.extract(
-        query,
-        choices,
+    # Stage 2: RapidFuzz top-K candidate generation
+    raw_candidates = process.extract(
+        query_clean,
+        clean_names,
         scorer=fuzz.token_set_ratio,
-        limit=TOP_K_CANDIDATES
+        limit=TOP_K_CANDIDATES,
     )
 
+    # Stage 3: composite re-scoring + threshold filter
     scored = []
-
-    for cand, _, idx in candidates:
-        score = composite_score(query, cand)
+    for cand_clean, _, _ in raw_candidates:
+        score = composite_score(query_clean, cand_clean)
         if score >= MIN_COMPOSITE_SCORE:
-            scored.append((idx, score))
+            scored.append((name_map[cand_clean], score))
 
     if not scored:
-        return {
-            "status": "NOT_FOUND",
-            "results": []
-        }
+        return {"status": "NOT_FOUND", "results": []}
 
-    # sort by score (desc)
     scored.sort(key=lambda x: x[1], reverse=True)
 
+    # Stage 4: fetch full records from Neo4j
     results = []
-    seen_names = set()
+    seen: set = set()
 
-    nutrition_cols = [
-        "Calories (kcal)", "Carbohydrates (g)", "Protein (g)",
-        "Fats (g)", "Free Sugar (g)", "Fibre (g)",
-        "Sodium (mg)", "Calcium (mg)", "Iron (mg)",
-        "Vitamin C (mg)", "Folate (µg)"
-    ]
-
-    for idx, score in scored:
-        row = df.iloc[idx]
-        name = str(row[DISPLAY_COL]).strip()
-
-        # deduplicate by display name
-        if name.lower() in seen_names:
+    for original_name, score in scored[: MAX_VARIANTS + 1]:
+        if original_name.lower() in seen:
             continue
-        seen_names.add(name.lower())
+        seen.add(original_name.lower())
+
+        record = neo4j_client.get_recipe_by_name(original_name)
+        if not record:
+            continue
 
         nutrition = {
-            col: to_python_type(row[col])
-            for col in nutrition_cols
-            if col in df.columns
+            display_key: to_python_type(record.get(neo4j_key))
+            for neo4j_key, display_key in NUTRITION_FIELD_MAP.items()
+            if record.get(neo4j_key) is not None
         }
 
         results.append({
-            "recipe_name": name,
-            "confidence": round(min(score / 100, 0.95), 2),
+            "recipe_name": record.get("name", original_name),
+            "confidence": round(min(score / 100, 0.95), 4),
             "nutrition": nutrition,
-            "ingredients": row.get("TranslatedIngredients"),
-            "instructions": row.get("TranslatedInstructions"),
+            "ingredients": record.get("raw_ingredients", ""),
+            "instructions": record.get("instructions", ""),
             "meta": {
-                "cuisine": row.get("Cuisine"),
-                "total_time": to_python_type(row.get("TotalTimeInMins"))
-            }
+                "cuisine": record.get("cuisine"),
+                "total_time": to_python_type(record.get("prep_time_mins")),
+            },
         })
 
-        if len(results) >= MAX_VARIANTS + 1:  # primary + variants
-            break
+    if not results:
+        return {"status": "NOT_FOUND", "results": []}
 
-    return {
-        "status": "FOUND",
-        "results": results
-    }
+    return {"status": "FOUND", "results": results}

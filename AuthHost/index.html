@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NutriSense Sign-In</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #0b0b0b;
+        color: #f2f2f2;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+      .card {
+        width: min(460px, 92vw);
+        border: 1px solid #262626;
+        border-radius: 14px;
+        padding: 24px;
+        background: #111111;
+      }
+      .muted {
+        color: #a3a3a3;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .error {
+        color: #fda4af;
+        font-size: 14px;
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Continue to NutriSense</h1>
+      <p class="muted" id="status">Starting Google sign-in...</p>
+      <p class="error" id="error"></p>
+    </main>
+
+    <script type="module">
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js'
+      import {
+        getAuth,
+        GoogleAuthProvider,
+        signInWithRedirect,
+        getRedirectResult,
+      } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js'
+
+      const statusEl = document.getElementById('status')
+      const errorEl = document.getElementById('error')
+
+      const firebaseConfig = {
+        apiKey: 'REPLACE_FIREBASE_API_KEY',
+        authDomain: 'REPLACE_FIREBASE_AUTH_DOMAIN',
+        projectId: 'REPLACE_FIREBASE_PROJECT_ID',
+        appId: 'REPLACE_FIREBASE_APP_ID',
+        messagingSenderId: 'REPLACE_FIREBASE_MESSAGING_SENDER_ID',
+      }
+
+      const app = initializeApp(firebaseConfig)
+      const auth = getAuth(app)
+      const provider = new GoogleAuthProvider()
+
+      async function redirectToDesktop(idToken) {
+        const redirectUrl = `nutrisense://auth?token=${encodeURIComponent(idToken)}`
+        window.location.href = redirectUrl
+      }
+
+      async function run() {
+        try {
+          const result = await getRedirectResult(auth)
+          if (!result?.user) {
+            statusEl.textContent = 'Opening secure Google sign-in...'
+            await signInWithRedirect(auth, provider)
+            return
+          }
+
+          const idToken = await result.user.getIdToken(true)
+          statusEl.textContent = 'Sign-in complete. Returning to desktop app...'
+          await redirectToDesktop(idToken)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Authentication failed.'
+          errorEl.textContent = message
+          statusEl.textContent = 'Unable to continue sign-in.'
+        }
+      }
+
+      run()
+    </script>
+  </body>
+</html>
