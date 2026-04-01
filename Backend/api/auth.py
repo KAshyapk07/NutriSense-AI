@@ -15,7 +15,8 @@ from jose.exceptions import ExpiredSignatureError
 
 from Backend.core.config import settings
 from Backend.dependencies.neo4j import get_neo4j_client
-from Backend.schemas.auth import LoginRequest, RefreshRequest, TokenPairResponse
+from Backend.dependencies.jti_blacklist import is_revoked, revoke
+from Backend.schemas.auth import LoginRequest, LogoutRequest, RefreshRequest, TokenPairResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -186,6 +187,14 @@ async def refresh(payload: RefreshRequest) -> TokenPairResponse:
             detail="Invalid token type for refresh.",
         )
 
+    # Reject revoked refresh tokens
+    refresh_jti = decoded.get("jti")
+    if refresh_jti and is_revoked(refresh_jti):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked.",
+        )
+
     subject = decoded.get("sub")
     if not subject:
         raise HTTPException(
@@ -213,3 +222,31 @@ async def refresh(payload: RefreshRequest) -> TokenPairResponse:
         access_token_expires_in=settings.auth_access_token_minutes * 60,
         refresh_token_expires_in=settings.auth_refresh_token_days * 24 * 60 * 60,
     )
+
+
+@router.post("/logout", status_code=200)
+async def logout(payload: LogoutRequest):
+    """Revoke the given access + refresh tokens so they cannot be reused."""
+    secret = _get_secret_key()
+    revoked_count = 0
+
+    for token in (payload.access_token, payload.refresh_token):
+        try:
+            decoded = jwt.decode(
+                token,
+                secret,
+                algorithms=[JWT_ALGORITHM],
+                audience=JWT_AUDIENCE,
+                issuer=JWT_ISSUER,
+                options={"verify_exp": False},  # allow already-expired tokens
+            )
+            jti = decoded.get("jti")
+            exp = decoded.get("exp")
+            if jti:
+                revoke(jti, token_exp=exp)
+                revoked_count += 1
+        except JWTError:
+            # Silently skip malformed tokens — the user is logging out anyway
+            pass
+
+    return {"revoked": revoked_count}

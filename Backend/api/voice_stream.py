@@ -582,7 +582,7 @@ async def _process_voice_intent(
     try:
         nutri_router = get_router()
         prompt = _build_intent_prompt(request)
-        raw = await nutri_router.engine.llm.generate_async(prompt)
+        raw = await nutri_router.voice_llm.generate_async(prompt)
 
         json_str = _extract_json(raw)
         data = json.loads(_repair_json(json_str))

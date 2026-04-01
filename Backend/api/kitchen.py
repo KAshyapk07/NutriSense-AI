@@ -347,7 +347,7 @@ async def _process_intent(text: str, session: CookingSession) -> dict[str, Any]:
     try:
         nutri_router = get_router()
         prompt = _build_intent_prompt(request)
-        raw = await nutri_router.engine.llm.generate_async(prompt)
+        raw = await nutri_router.voice_llm.generate_async(prompt)
         json_str = _extract_json(raw)
         data = json.loads(_repair_json(json_str))
 
@@ -466,7 +466,7 @@ INSTRUCTIONS:
 
     try:
         nutri_router = get_router()
-        reply = await nutri_router.engine.llm.generate_async(prompt)
+        reply = await nutri_router.voice_llm.generate_async(prompt)
         return reply.strip()
     except Exception as exc:
         logger.exception("Kitchen Q&A failed: %s", exc)

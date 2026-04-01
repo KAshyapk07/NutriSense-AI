@@ -55,6 +55,21 @@ class Settings:
     firebase_project_id: Optional[str] = field(
         default_factory=lambda: os.getenv("FIREBASE_PROJECT_ID") or None
     )
+    # ── LLM providers ─────────────────────────────────────────────────────
+    # Groq  — fast inference for voice/chat (free tier)
+    groq_api_key: str = field(
+        default_factory=lambda: os.getenv("GROQ_API_KEY", "")
+    )
+    groq_model: str = field(
+        default_factory=lambda: os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    )
+    # Gemini — structured JSON / reasoning for /process, /chef/parse (free tier)
+    gemini_api_key: str = field(
+        default_factory=lambda: os.getenv("GEMINI_API_KEY", "")
+    )
+    gemini_model: str = field(
+        default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    )
 
     @property
     def max_content_bytes(self) -> int:

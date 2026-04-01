@@ -922,12 +922,11 @@ async def chef_intent(body: ChefIntentRequest, nutri_router=Depends(get_router))
             display_text=display,
         )
 
-    # Stage 3: LLM intent parsing
+    # Stage 3: LLM intent parsing (Groq — fast voice model)
     prompt = _build_intent_prompt(body)
-    llm_engine = nutri_router.engine
 
     try:
-        raw = await llm_engine.llm.generate_async(prompt)
+        raw = await nutri_router.voice_llm.generate_async(prompt)
     except Exception as exc:
         logger.exception("Chef intent LLM failed: %s", exc)
         raise HTTPException(status_code=500, detail="Voice processing unavailable.")
