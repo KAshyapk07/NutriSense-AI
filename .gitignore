@@ -4,8 +4,9 @@ Dataset/raw/
 Dataset/processed/
 
 # Trained model weights
-Src/Image_classifier/models/
-*.h5
+# Keep ConvNeXt model for Docker deployment, ignore old models
+Src/Image_classifier/models/efficientb4*.h5
+Src/Image_classifier/models/meta.json
 *.keras
 *.pb
 
