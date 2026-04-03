@@ -5,6 +5,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -19,6 +20,8 @@ from Backend.api import voice_stream as voice_stream_api
 from Backend.api import kitchen as kitchen_api
 from Backend.core.config import settings
 from Backend.core.lifespan import lifespan
+from Backend.dependencies.auth_user import _decode_access_token
+from Backend.dependencies.rate_limiter import current_user_uid
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,14 +39,54 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Middleware
+# ── Security headers middleware ───────────────────────────────────────
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), geolocation=(), payment=()"
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=63072000; includeSubDomains; preload"
+            )
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+# ── CORS middleware ──────────────────────────────────────────────────
+# Production: set ALLOWED_ORIGINS=app://.,http://localhost:5173 in .env
+# Default allows localhost dev only; use "*" explicitly to open up.
+_DEFAULT_ORIGINS = "http://localhost:5173,http://localhost:8000"
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),
+    allow_origins=os.getenv("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Rate-limit context middleware ─────────────────────────────────────
+# Extracts the user UID from the Bearer token (if present) and sets it
+# in a context variable so the LLM rate limiter can enforce per-user limits.
+@app.middleware("http")
+async def set_user_context(request: Request, call_next):
+    uid = None
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:]
+        payload = _decode_access_token(token)
+        if payload:
+            uid = payload.get("sub")
+    tok = current_user_uid.set(uid)
+    try:
+        response = await call_next(request)
+    finally:
+        current_user_uid.reset(tok)
+    return response
+
 
 # Routers
 app.include_router(process_api.router)

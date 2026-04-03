@@ -75,11 +75,14 @@ COMPARE_REGEX = re.compile('|'.join(COMPARE_PATTERNS), re.IGNORECASE)
 
 
 class NutriSenseRouter:
-    def __init__(self, neo4j_client, llm_engine, image_model=None, graph_rag_service=None):
+    def __init__(self, neo4j_client, llm_engine, image_model=None, graph_rag_service=None, voice_llm=None):
         self.neo4j_client = neo4j_client
         self.engine = llm_engine
         self.image_model = image_model
         self.graph_rag_service = graph_rag_service
+        # Separate fast client for voice/chat endpoints (Groq).
+        # Falls back to the engine's LLM if not provided.
+        self.voice_llm = voice_llm or llm_engine.llm
 
     # ─────────────────────────────────────────────────────────────────────
     # Cluster detection helpers

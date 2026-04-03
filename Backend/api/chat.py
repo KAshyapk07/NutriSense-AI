@@ -120,8 +120,7 @@ INSTRUCTIONS:
 6. ALWAYS respond in English only. No emojis."""
 
     try:
-        llm_engine = nutri_router.engine
-        reply = await llm_engine.llm.generate_async(prompt)
+        reply = await nutri_router.voice_llm.generate_async(prompt)
         return ChatResponse(reply=reply)
     except Exception as exc:
         logger.exception("Chat generation failed: %s", exc)

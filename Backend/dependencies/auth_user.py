@@ -16,6 +16,7 @@ from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError
 
 from Backend.core.config import settings
+from Backend.dependencies.jti_blacklist import is_revoked
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,12 @@ def _decode_access_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
     if payload.get("type") != "access":
+        return None
+
+    # Reject revoked tokens (logout)
+    jti = payload.get("jti")
+    if jti and is_revoked(jti):
+        logger.debug("Access token JTI %s has been revoked.", jti)
         return None
 
     return payload
