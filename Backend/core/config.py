@@ -52,6 +52,9 @@ class Settings:
     firebase_service_account_path: Optional[str] = field(
         default_factory=lambda: os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") or None
     )
+    firebase_service_account_json: Optional[str] = field(
+        default_factory=lambda: os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON") or None
+    )
     firebase_project_id: Optional[str] = field(
         default_factory=lambda: os.getenv("FIREBASE_PROJECT_ID") or None
     )

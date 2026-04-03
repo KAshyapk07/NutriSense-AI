@@ -1,14 +1,13 @@
 # Core numerical
 numpy==1.26.4
-pandas==2.2.1
 
-# Image classification
-tensorflow>=2.15.0
+# Image classification — CPU-only torch (no CUDA, ~250MB vs ~2.5GB)
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch>=1.11.0
 torchvision>=0.12.0
+timm>=0.9.0
 Pillow>=10.2.0
-scikit-learn>=1.4.0
-matplotlib==3.8.3
+huggingface_hub>=0.20.0
 
 # FastAPI backend
 fastapi>=0.110.0

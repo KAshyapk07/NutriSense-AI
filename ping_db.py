@@ -14,8 +14,6 @@ def ping_database():
         
         records, summary, keys = driver.execute_query(
             "RETURN 1 AS ping",
-            database_="neo4j",
-            routing_="r"
         )
         print(" Successfully pinged Neo4j database to keep it awake!")
         driver.close()

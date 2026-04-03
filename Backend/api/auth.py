@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Tuple
@@ -36,7 +37,9 @@ def _get_firebase_app() -> firebase_admin.App:
     if firebase_admin._apps:
         return firebase_admin.get_app()
 
-    if settings.firebase_service_account_path:
+    if settings.firebase_service_account_json:
+        cred = credentials.Certificate(json.loads(settings.firebase_service_account_json))
+    elif settings.firebase_service_account_path:
         cred = credentials.Certificate(settings.firebase_service_account_path)
     else:
         cred = credentials.ApplicationDefault()

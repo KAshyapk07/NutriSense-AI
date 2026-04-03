@@ -43,10 +43,9 @@ COPY Backend/ ./Backend/
 COPY Src/ ./Src/
 COPY run.py .
 
-# Ensure ConvNeXt model is present
-# (Required file: Src/Image_classifier/models/nutrisense_convnext_small_best.pth)
-RUN test -f Src/Image_classifier/models/nutrisense_convnext_small_best.pth || \
-    (echo "ERROR: ConvNeXt model file not found. Please ensure Src/Image_classifier/models/nutrisense_convnext_small_best.pth exists." && exit 1)
+# Download ConvNeXt model from HuggingFace Hub
+RUN mkdir -p Src/Image_classifier/models && \
+    python -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='Kashyapk07/NutriSense_ConvNext_Small_Best', filename='nutrisense_convnext_small_best.pth', local_dir='Src/Image_classifier/models')"
 
 # Create temp_uploads directory for image processing
 RUN mkdir -p temp_uploads
@@ -65,8 +64,8 @@ ENV MODEL_PATH=Src/Image_classifier/models/nutrisense_convnext_small_best.pth \
     STT_BACKEND=faster-whisper
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=5)"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:${PORT:-8000}/health', timeout=5)"
 
-# Run FastAPI with uvicorn
-CMD ["uvicorn", "Backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Run FastAPI with uvicorn — uses $PORT if set (Render), falls back to 8000
+CMD uvicorn Backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1
