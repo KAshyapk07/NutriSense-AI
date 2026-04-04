@@ -91,6 +91,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const bootDone = useRef(false)
   const refreshInFlight = useRef<Promise<string | null> | null>(null)
   const backendSyncInFlight = useRef(false)
+  // Keep latest refresh token in a ref so the extension sync handler can
+  // re-broadcast without making a new API call.
+  const latestRefreshToken = useRef<string | null>(null)
 
   const persistUser = useCallback((authUser: AuthUser | null) => {
     if (!authUser) {
@@ -105,8 +108,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const applyTokenPair = useCallback(async (pair: { access_token: string; refresh_token: string }) => {
     setAccessToken(pair.access_token)
     await storeRefreshToken(pair.refresh_token)
+    latestRefreshToken.current = pair.refresh_token
     const parsed = userFromJwt(pair.access_token)
     if (parsed) persistUser(parsed)
+    // Broadcast to Chrome extension content script (no-op if extension not installed)
+    window.postMessage({
+      type: 'NUTRISENSE_EXT_AUTH',
+      refreshToken: pair.refresh_token,
+      user: parsed,
+    }, window.location.origin)
   }, [persistUser])
 
   const exchangeFirebaseToken = useCallback(async (idToken: string) => {
@@ -236,6 +246,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [loading, accessToken, exchangeFirebaseToken])
 
+  // ── Extension sync on connect ─────────────────────────────────────────────
+  // When the NutriSense extension loads on this page it fires a custom DOM
+  // event. We re-broadcast the current session so the extension gets the token
+  // without requiring the user to log in or out again.
+  useEffect(() => {
+    const handleExtConnected = () => {
+      const rt = latestRefreshToken.current
+      if (!rt || !user) return
+      window.postMessage({
+        type: 'NUTRISENSE_EXT_AUTH',
+        refreshToken: rt,
+        user,
+      }, window.location.origin)
+    }
+    window.addEventListener('nutrisense-ext-connected', handleExtConnected)
+    return () => window.removeEventListener('nutrisense-ext-connected', handleExtConnected)
+  }, [user])
+
   // ── Public auth actions ────────────────────────────────────────────────────
 
   const loginWithEmail = useCallback(async (email: string, password: string) => {
@@ -291,6 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persistUser(null)
     void clearRefreshToken().catch(() => undefined)
     // Do not reset bootDone — logout state is handled here directly, not via onAuthStateChanged
+    window.postMessage({ type: 'NUTRISENSE_EXT_AUTH', refreshToken: null, user: null }, window.location.origin)
   }, [persistUser])
 
   const value = useMemo<AuthContextValue>(() => ({

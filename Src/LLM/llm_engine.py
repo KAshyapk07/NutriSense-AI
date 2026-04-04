@@ -181,7 +181,7 @@ IMPORTANT RULES:
 - Do NOT invent numbers
 - Compare based on the user's goal
 - Mention trade-offs
-{f"- Note that some values are estimates and may vary by recipe" if (is_a_estimated or is_b_estimated) else ""}
+{"- Note that some values are estimates and may vary by recipe" if (is_a_estimated or is_b_estimated) else ""}
 
 FORMAT YOUR RESPONSE WITH CLEAR SECTIONS:
 
@@ -419,7 +419,7 @@ IMPORTANT RULES:
 - Do NOT invent numbers
 - Compare based on the user's goal
 - Mention trade-offs
-{f"- Note that some values are estimates and may vary by recipe" if (is_a_estimated or is_b_estimated) else ""}
+{"- Note that some values are estimates and may vary by recipe" if (is_a_estimated or is_b_estimated) else ""}
 
 FORMAT YOUR RESPONSE WITH CLEAR SECTIONS:
 

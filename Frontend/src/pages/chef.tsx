@@ -1014,26 +1014,37 @@ export default function ChefPage() {
   useEffect(() => {
     if (remoteBaseUrl) return
 
-    function originForPhone(): string {
+    async function resolveOriginForPhone(): Promise<string> {
       const { hostname, port, protocol } = window.location
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        const lanIp = (import.meta.env.VITE_LAN_HOST as string | undefined)
-        if (lanIp) return `${protocol}//${lanIp}${port ? `:${port}` : ''}`
+        // In Electron: ask the main process for the real LAN IP at runtime
+        const desktopSystem = (window as unknown as Record<string, unknown>).desktopSystem as
+          | { getLanIp: () => Promise<string | null> }
+          | undefined
+        if (desktopSystem?.getLanIp) {
+          try {
+            const lanIp = await desktopSystem.getLanIp()
+            if (lanIp) return `${protocol}//${lanIp}${port ? `:${port}` : ''}`
+          } catch {}
+        }
+        // Dev fallback: VITE_LAN_HOST build-time override
+        const buildTimeIp = import.meta.env.VITE_LAN_HOST as string | undefined
+        if (buildTimeIp) return `${protocol}//${buildTimeIp}${port ? `:${port}` : ''}`
       }
       return window.location.origin
     }
 
     getAppConfig()
-      .then((cfg) => {
+      .then(async (cfg) => {
+        const fallback = await resolveOriginForPhone()
         setRemoteBaseUrl(
-          normalizeChefRemoteBaseUrl(
-            cfg.remote_base_url ? cfg.remote_base_url : originForPhone(),
-          ),
+          normalizeChefRemoteBaseUrl(cfg.remote_base_url ? cfg.remote_base_url : fallback),
         )
       })
-      .catch(() =>
-        setRemoteBaseUrl(normalizeChefRemoteBaseUrl(originForPhone())),
-      )
+      .catch(async () => {
+        const fallback = await resolveOriginForPhone()
+        setRemoteBaseUrl(normalizeChefRemoteBaseUrl(fallback))
+      })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

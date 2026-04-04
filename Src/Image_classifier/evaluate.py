@@ -15,8 +15,6 @@ import argparse
 import os
 import json
 import numpy as np
-import tensorflow as tf
-from pathlib import Path
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, accuracy_score
 import matplotlib.pyplot as plt
 import csv

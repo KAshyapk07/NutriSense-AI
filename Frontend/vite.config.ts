@@ -35,49 +35,49 @@ export default defineConfig({
     host: true,
     proxy: {
       '/process': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
       },
       '/search': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
       },
       '/health': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
       },
       '/chat': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
       },
       '/chef/': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
       },
       '/config': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
       },
       '/ws/kitchen': {
-        target: 'http://127.0.0.1:8000',
+        target: 'wss://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
         ws: true,
       },
       '/ws/chef-voice': {
-        target: 'http://127.0.0.1:8000',
+        target: 'wss://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
         ws: true,
       },
       '/auth': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
       },
       '/users': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
       },
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://nutrisense-ai-production.up.railway.app',
         changeOrigin: true,
       },
     },

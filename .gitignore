@@ -2,6 +2,7 @@
 Dataset/Images/
 Dataset/raw/
 Dataset/processed/
+Extension/
 
 # Trained model weights
 Src/Image_classifier/models/efficientb4*.h5

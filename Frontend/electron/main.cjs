@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const path = require('path')
+const os = require('os')
 const keytar = require('keytar')
 
 const APP_PROTOCOL = 'nutrisense'
@@ -93,6 +94,18 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+ipcMain.handle('system:get-lan-ip', () => {
+  const nets = os.networkInterfaces()
+  for (const iface of Object.values(nets)) {
+    for (const net of iface) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address
+      }
+    }
+  }
+  return null
 })
 
 ipcMain.handle('auth:open-system-browser', async (_event, url) => {

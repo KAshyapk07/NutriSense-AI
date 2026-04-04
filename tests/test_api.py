@@ -51,13 +51,25 @@ def client(mock_router_instance):
     with (
         patch("Backend.dependencies.neo4j.init"),
         patch("Backend.dependencies.neo4j.close"),
+        patch("Backend.dependencies.neo4j.get_neo4j_client"),  # prevents RuntimeError in lifespan
         patch("Backend.dependencies.model.init"),
         patch("Backend.dependencies.router.init"),
+        patch("Backend.dependencies.graph_rag.init"),
+        patch("Backend.dependencies.graph_rag.get_graph_rag_service"),
+        patch("Backend.dependencies.recommender.init"),
     ):
         from Backend.main import app
         from Backend.dependencies.router import get_router
+        # get_neo4j_client is now the MagicMock created by the patch above;
+        # importing it here gives us the same object that process.py holds,
+        # so dependency_overrides can replace it with a clean lambda.
+        from Backend.dependencies.neo4j import get_neo4j_client
+        from Backend.dependencies.auth_user import get_optional_user
 
+        mock_neo4j = MagicMock()
         app.dependency_overrides[get_router] = lambda: mock_router_instance
+        app.dependency_overrides[get_neo4j_client] = lambda: mock_neo4j
+        app.dependency_overrides[get_optional_user] = lambda: None
 
         with TestClient(app, raise_server_exceptions=False) as c:
             yield c

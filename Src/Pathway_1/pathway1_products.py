@@ -137,6 +137,7 @@ def pathway_1_product_lookup(query: str, neo4j_client) -> dict:
             "serving_size": record.get("serving_size"),
             "image_url":    record.get("image_url"),
             "meta": {
+                "id":               record.get("id"),
                 "nutriscore_grade": record.get("nutriscore_grade"),
                 "nova_group":       record.get("nova_group"),
             },

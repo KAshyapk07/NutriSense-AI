@@ -7,7 +7,6 @@ import traceback
 
 from Src.Pathway_1.pathway1 import pathway_1_lookup as search_recipe
 from Src.Pathway_1.pathway1_products import pathway_1_product_lookup as search_product
-from Src.neo4j_client import Neo4jClient
 
 # ── Product / packaged-food detection keywords ─────────────────────────────
 # If a dish name contains any of these tokens we prefer the FoodProduct cluster.
@@ -329,7 +328,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
             return self.engine.estimate_nutrition(name)
 
-        except Exception as e:
+        except Exception:
             return self.engine.estimate_nutrition(name)
 
     def handle_image_extraction(self, predictions: list) -> dict:
@@ -357,13 +356,13 @@ Return ONLY valid JSON (no markdown, no explanation):
                             v["accuracy"] = float(v["confidence"])
                         variants.append(v)
                     out["variants"] = variants
-                    out["meta"] = {"image_predictions": image_predictions}
+                    out["meta"] = {**out.get("meta", {}), "image_predictions": image_predictions}
                     return out
             top_label, _ = predictions[0]
             result = self.engine.estimate_nutrition(top_label)
-            result["meta"] = {"image_predictions": image_predictions}
+            result["meta"] = {**result.get("meta", {}), "image_predictions": image_predictions}
             return result
-        except Exception as e:
+        except Exception:
             top_label, _ = predictions[0]
             return self.engine.estimate_nutrition(top_label)
 
@@ -392,7 +391,7 @@ Return ONLY valid JSON (no markdown, no explanation):
             constraint_text = f" with {constraint}" if constraint else ""
             return self.engine.estimate_nutrition(f"{name}{constraint_text}")
 
-        except Exception as e:
+        except Exception:
             constraint_text = f" with {constraint}" if constraint else ""
             return self.engine.estimate_nutrition(f"{name}{constraint_text}")
 
@@ -462,7 +461,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
             return out
 
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
             goal_text = f" for {goal}" if goal else ""
             return self.engine.estimate_nutrition(f"Compare {dishes[0]} and {dishes[1]}{goal_text}")
@@ -598,11 +597,11 @@ Return ONLY valid JSON (no markdown, no explanation):
                             v["accuracy"] = float(v["confidence"])
                         variants.append(v)
                     out["variants"] = variants
-                    out["meta"] = {"image_predictions": image_predictions}
+                    out["meta"] = {**out.get("meta", {}), "image_predictions": image_predictions}
                     return out
             top_label, _ = predictions[0]
             result = await self.engine.estimate_nutrition_async(top_label)
-            result["meta"] = {"image_predictions": image_predictions}
+            result["meta"] = {**result.get("meta", {}), "image_predictions": image_predictions}
             return result
         except Exception:
             top_label, _ = predictions[0]
@@ -701,7 +700,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
             return out
 
-        except Exception as exc:
+        except Exception:
             traceback.print_exc()
             goal_text = f" for {goal}" if goal else ""
             return await self.engine.estimate_nutrition_async(

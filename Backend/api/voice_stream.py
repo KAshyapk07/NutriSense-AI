@@ -35,6 +35,7 @@ import asyncio
 import io
 import json
 import logging
+import os
 import time
 from typing import Any, Optional
 
@@ -124,8 +125,6 @@ _registry = _SessionRegistry()
 #  Both are wrapped behind the same interface so the voice pipeline is
 #  completely agnostic to the provider.
 # ══════════════════════════════════════════════════════════════════════
-
-import os
 
 _ACTIVE_STT_BACKEND: str = os.getenv("STT_BACKEND", "faster-whisper")
 
@@ -955,7 +954,6 @@ async def chef_voice_websocket(websocket: WebSocket, session_id: str) -> None:
         await _registry.unregister(session_id, role)
 
         # Notify the paired connection
-        other_role = "host" if role == "phone" else "phone"
         other_ws = (
             _registry.get_host(session_id)
             if role == "phone"

@@ -3,7 +3,7 @@ import os
 import uuid
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
 
 from Backend.core.config import settings
 from Backend.dependencies.auth_user import get_optional_user
@@ -24,11 +24,13 @@ def _validate_extension(filename: str) -> bool:
 async def process(
     background_tasks: BackgroundTasks,
     query: Optional[str] = Form(None),
+    nsq: Optional[str] = Query(None),
     image: Optional[UploadFile] = File(None),
     nutri_router=Depends(get_router),
     current_user: Optional[Dict[str, Any]] = Depends(get_optional_user),
     neo4j_client=Depends(get_neo4j_client),
 ):
+    query = query or nsq
     has_query = query and query.strip()
     has_image = image is not None and image.filename
 

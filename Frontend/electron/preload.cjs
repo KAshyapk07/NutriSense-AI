@@ -1,5 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+contextBridge.exposeInMainWorld('desktopSystem', {
+  getLanIp: () => ipcRenderer.invoke('system:get-lan-ip'),
+})
+
 contextBridge.exposeInMainWorld('desktopAuth', {
   openSystemBrowser: (url) => ipcRenderer.invoke('auth:open-system-browser', url),
   storeRefreshToken: (token) => ipcRenderer.invoke('auth:store-refresh-token', token),
