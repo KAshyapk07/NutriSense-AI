@@ -24,16 +24,16 @@ jobs:
       - name: Log in to container registry
         uses: docker/login-action@v2
         with:
-          registry: docker.io/
-          username: ${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_ADE5151B900043CC9C2C8B098C87AFDA }}
-          password: ${{ secrets.AZUREAPPSERVICE_CONTAINERPASSWORD_6C8371ACA4CC470DB444186E1F6EFC1C }}
+          registry: mcr.microsoft.com/
+          username: ${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_A6B655E1859B4D40BD7C56299102AA31 }}
+          password: ${{ secrets.AZUREAPPSERVICE_CONTAINERPASSWORD_6C8663EA1A454B748557F062CEE679CE }}
 
       - name: Build and push container image to registry
         uses: docker/build-push-action@v3
         with:
           context: .
           push: true
-          tags: docker.io/${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_ADE5151B900043CC9C2C8B098C87AFDA }}/appsvc/staticsite:${{ github.sha }}
+          tags: mcr.microsoft.com/${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_A6B655E1859B4D40BD7C56299102AA31 }}/pes2ug23cs263kashyapk/nutrisense-ai:${{ github.sha }}
           file: ./Dockerfile
 
   deploy:
@@ -49,9 +49,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B59EBDA471DA4C9ABEBA104A07E2431D }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_10F7C07CA0AA48D98B30F87FF0DECBE7 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_342FDEB916B0429FA408B05DA6A827B9 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0799E0416D234E0EAF0F9FB1D7ED94B6 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_3C3C3E2E75894A26BFDDF24EAC385533 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_F73D474669DC40318A88CCC229596778 }}
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
@@ -59,5 +59,5 @@ jobs:
         with:
           app-name: 'NutriSense-AI'
           slot-name: 'Production'
-          images: 'docker.io/${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_ADE5151B900043CC9C2C8B098C87AFDA }}/appsvc/staticsite:${{ github.sha }}'
+          images: 'mcr.microsoft.com/${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_A6B655E1859B4D40BD7C56299102AA31 }}/pes2ug23cs263kashyapk/nutrisense-ai:${{ github.sha }}'
           
