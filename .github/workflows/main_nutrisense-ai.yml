@@ -70,7 +70,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
-          registry: docker.io
+          registry: docker.io/
           username: pes2ug23cs263kashyapk
           password: ${{ secrets.DOCKER_HUB_PAT }}
 
