@@ -71,7 +71,7 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: docker.io/
-          username: ${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_A390B296D9574B2791D8C06B29538038 }}
+          username: pes2ug23cs263kashyapk
           password: ${{ secrets.AZUREAPPSERVICE_CONTAINERPASSWORD_59CF857C1B274AF09D395B60F0E8AB3C }}
 
       - name: Build and push image
@@ -79,7 +79,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: docker.io/${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_A390B296D9574B2791D8C06B29538038 }}/nutrisense-ai:${{ github.sha }}
+          tags: docker.io/pes2ug23cs263kashyapk/nutrisense-ai:${{ github.sha }}
           file: ./Dockerfile
 
   # ── 4. DEPLOY ───────────────────────────────────────────
@@ -104,4 +104,4 @@ jobs:
         with:
           app-name: 'NutriSense-AI'
           slot-name: 'Production'
-          images: docker.io/${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_A390B296D9574B2791D8C06B29538038 }}/nutrisense-ai:${{ github.sha }}
+          images: docker.io/pes2ug23cs263kashyapk/nutrisense-ai:${{ github.sha }}
