@@ -72,7 +72,7 @@ jobs:
         with:
           registry: docker.io/
           username: pes2ug23cs263kashyapk
-          password: ${{ secrets.AZUREAPPSERVICE_CONTAINERPASSWORD_59CF857C1B274AF09D395B60F0E8AB3C }}
+          password: ${{ secrets.DOCKER_HUB_PAT }}
 
       - name: Build and push image
         uses: docker/build-push-action@v3
