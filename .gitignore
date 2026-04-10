@@ -2,7 +2,6 @@
 Dataset/Images/
 Dataset/raw/
 Dataset/processed/
-Extension/
 
 # Trained model weights
 Src/Image_classifier/models/efficientb4*.h5
@@ -19,7 +18,7 @@ Src/Image_classifier/models/meta.json
 !tsconfig.json
 *firebase*.json
 firebase-adminsdk*.json
-
+Extension/
 # Virtual environments
 .Nutri/
 venv/
