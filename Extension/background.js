@@ -185,13 +185,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   // ── Auth state ──
   if (msg.type === 'GET_AUTH_STATE') {
-    chrome.storage.local.get(['authUser', 'refreshToken', 'accessToken'], (data) =>
+    ;(async () => {
+      const data = await chrome.storage.local.get(['authUser', 'refreshToken', 'accessToken'])
+      // Wake the backend in parallel so it's ready when the user signs in
+      warmupBackend()
       sendResponse({
         user: data.authUser || null,
         hasToken: !!data.refreshToken,
         isConnected: !!data.refreshToken,
       })
-    )
+    })()
     return true
   }
 
@@ -227,7 +230,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
         const { idToken, email, displayName } = await fbRes.json()
 
-        const nsRes = await fetch(`${base}/auth/login`, {
+        const nsRes = await fetchWithTimeout(`${base}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
           body: JSON.stringify({ firebase_id_token: idToken }),
@@ -287,7 +290,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
 
         // Step 3: Exchange Firebase ID token → NutriSense JWT
-        const nsRes = await fetch(`${base}/auth/login`, {
+        const nsRes = await fetchWithTimeout(`${base}/auth/login`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
           body: JSON.stringify({ firebase_id_token: idToken }),
@@ -354,6 +357,28 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 async function getBase() {
   const { apiUrl } = await chrome.storage.sync.get(['apiUrl'])
   return (apiUrl || DEFAULT_API_URL).replace(/\/$/, '')
+}
+
+async function fetchWithTimeout(url, options = {}, ms = 20000) {
+  const ctrl = new AbortController()
+  const id = setTimeout(() => ctrl.abort(), ms)
+  try {
+    const res = await fetch(url, { ...options, signal: ctrl.signal })
+    return res
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('Request timed out. The server may be starting up — try again in a moment.')
+    throw err
+  } finally {
+    clearTimeout(id)
+  }
+}
+
+// Fire-and-forget: wake the Azure instance early so auth calls are fast.
+async function warmupBackend() {
+  try {
+    const base = await getBase()
+    await fetch(`${base}/health`, { method: 'GET', signal: AbortSignal.timeout(5000) })
+  } catch { /* ignore — warmup is best-effort */ }
 }
 
 async function doRefresh(refreshToken) {
@@ -497,7 +522,7 @@ async function signInWithGoogle() {
 
   // Exchange Firebase ID token → NutriSense JWT
   const base  = await getBase()
-  const nsRes = await fetch(`${base}/auth/login`, {
+  const nsRes = await fetchWithTimeout(`${base}/auth/login`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
     body: JSON.stringify({ firebase_id_token: idToken }),
@@ -562,8 +587,11 @@ function friendlyFirebaseError(msg) {
 
 function sendToTab(tabId, message) {
   chrome.tabs.sendMessage(tabId, message).catch(() => {
-    chrome.scripting
-      .executeScript({ target: { tabId }, files: ['content.js'] })
+    // Inject CSS then JS, then send the message
+    Promise.all([
+      chrome.scripting.insertCSS({ target: { tabId }, files: ['content.css'] }),
+      chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }),
+    ])
       .then(() => chrome.tabs.sendMessage(tabId, message).catch(() => {}))
       .catch(() => {})
   })

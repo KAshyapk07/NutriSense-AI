@@ -30,6 +30,7 @@ const btnRegister   = document.getElementById('btn-register')
 
 const loginError    = document.getElementById('login-error')
 
+const viewPrivacy  = document.getElementById('view-privacy')
 const viewMain     = document.getElementById('view-main')
 const queryForm    = document.getElementById('query-form')
 const queryInput   = document.getElementById('query-input')
@@ -76,19 +77,38 @@ chrome.runtime.onMessage.addListener((msg) => {
 
 // ── Auth views ────────────────────────────────────────────────────────────────
 
-function showConnected(user) {
+async function showConnected(user) {
   currentUser = user
   authChip.classList.remove('hidden')
   authUserName.textContent = user.name || user.email
   viewLogin.classList.add('hidden')
-  viewMain.classList.remove('hidden')
-  setTimeout(() => queryInput.focus(), 50)
+
+  // Check if this account has accepted the privacy policy
+  const ppKey = `pp_${user.uid || btoa(user.email)}`
+  const stored = await chrome.storage.local.get([ppKey])
+
+  if (!stored[ppKey]) {
+    viewPrivacy.classList.remove('hidden')
+    viewMain.classList.add('hidden')
+    // Wire up the full privacy policy link (only needs href set once)
+    const ppLink = document.getElementById('pp-full-link')
+    ppLink.href = chrome.runtime.getURL('privacy-policy.html')
+    ppLink.addEventListener('click', (e) => {
+      e.preventDefault()
+      chrome.tabs.create({ url: ppLink.href })
+    })
+  } else {
+    viewPrivacy.classList.add('hidden')
+    viewMain.classList.remove('hidden')
+    setTimeout(() => queryInput.focus(), 50)
+  }
 }
 
 function showLoginView() {
   currentUser = null
   authChip.classList.add('hidden')
   viewMain.classList.add('hidden')
+  viewPrivacy.classList.add('hidden')
   viewLogin.classList.remove('hidden')
 }
 
@@ -255,6 +275,21 @@ btnDisconnect.addEventListener('click', async () => {
   await chrome.runtime.sendMessage({ type: 'AUTH_LOGOUT' })
   showLoginView()
   resultArea.innerHTML = ''
+})
+
+// ── Privacy policy gate ───────────────────────────────────────────────────────
+
+document.getElementById('pp-checkbox').addEventListener('change', (e) => {
+  document.getElementById('btn-pp-agree').disabled = !e.target.checked
+})
+
+document.getElementById('btn-pp-agree').addEventListener('click', async () => {
+  if (!currentUser) return
+  const ppKey = `pp_${currentUser.uid || btoa(currentUser.email)}`
+  await chrome.storage.local.set({ [ppKey]: true })
+  viewPrivacy.classList.add('hidden')
+  viewMain.classList.remove('hidden')
+  setTimeout(() => queryInput.focus(), 50)
 })
 
 // ── Mode toggle ───────────────────────────────────────────────────────────────

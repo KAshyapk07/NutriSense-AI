@@ -132,6 +132,48 @@
 
   </section>
 
+  <!-- Privacy policy gate — shown once per account -->
+  <section id="view-privacy" class="view hidden" aria-label="Privacy policy agreement">
+    <div class="pp-wrap">
+      <div class="pp-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <h2 class="pp-heading">Before you continue</h2>
+      <p class="pp-sub">Please review how NutriSense AI handles your data.</p>
+
+      <div class="pp-points">
+        <div class="pp-point">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Food queries &amp; images are sent to our servers for analysis only — not stored.</span>
+        </div>
+        <div class="pp-point">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Your email &amp; name are stored in Firebase Authentication for sign-in.</span>
+        </div>
+        <div class="pp-point">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Auth tokens are stored locally on your device only.</span>
+        </div>
+        <div class="pp-point">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>We never sell your data or use it for advertising.</span>
+        </div>
+      </div>
+
+      <a class="pp-link" href="#" id="pp-full-link" target="_blank" rel="noopener">Read full Privacy Policy</a>
+
+      <label class="pp-check-row" id="pp-check-label">
+        <input type="checkbox" id="pp-checkbox" />
+        <span class="pp-check-box" aria-hidden="true"></span>
+        <span class="pp-check-text">I have read and agree to the Privacy Policy</span>
+      </label>
+
+      <button id="btn-pp-agree" class="btn-primary btn-block" disabled>Continue</button>
+    </div>
+  </section>
+
   <!-- Main view -->
   <main id="view-main" class="view hidden">
 

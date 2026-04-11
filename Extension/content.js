@@ -605,12 +605,14 @@
     if (e.data?.type !== 'NUTRISENSE_EXT_AUTH') return
     // Only accept from the same origin (app page) or known NutriSense hosts
     const origin = e.origin || ''
-    const allowed =
-      origin === window.location.origin ||
-      /nutrisense/i.test(origin) ||
-      /azurewebsites\.net/i.test(origin) ||
-      /railway\.app/i.test(origin) ||
-      /vercel\.app/i.test(origin)
+    const ALLOWED_ORIGINS = new Set([
+      'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
+      'https://nutrisense.app',
+      'https://app.nutrisense.app',
+      'http://localhost:5173',
+      'http://localhost:3000',
+    ])
+    const allowed = origin === window.location.origin || ALLOWED_ORIGINS.has(origin)
     if (!allowed) return
     chrome.runtime.sendMessage({
       type: 'SYNC_AUTH',
