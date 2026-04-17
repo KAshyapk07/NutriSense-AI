@@ -13,6 +13,7 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   onAuthStateChanged,
+  signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -23,7 +24,6 @@ import {
   getRefreshToken,
   isDesktopShell,
   onAuthSuccess,
-  openSystemBrowser,
   storeRefreshToken,
 } from '@/lib/desktop-auth'
 import { firebaseAuth } from '@/lib/firebase'
@@ -293,20 +293,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [exchangeFirebaseToken, persistUser])
 
   const signInWithGoogle = useCallback(async () => {
+    let fbUser
     if (isDesktopShell()) {
-      const authHostUrl = import.meta.env.VITE_AUTH_HOST_URL ?? 'https://auth.nutrisense.com'
-      await openSystemBrowser(authHostUrl)
-      return
+      const { idToken } = await window.desktopAuth!.googleSignIn()
+      const credential = GoogleAuthProvider.credential(idToken)
+      const result = await signInWithCredential(firebaseAuth, credential)
+      fbUser = result.user
+    } else {
+      const provider = new GoogleAuthProvider()
+      const result = await signInWithPopup(firebaseAuth, provider)
+      fbUser = result.user
     }
-    const provider = new GoogleAuthProvider()
-    // Firebase popup errors (popup closed, cancelled) throw here and surface to the UI
-    const credential = await signInWithPopup(firebaseAuth, provider)
-    const fbUser = credential.user
     const idToken = await fbUser.getIdToken(true)
     try {
       await exchangeFirebaseToken(idToken)
     } catch {
-      // Backend unavailable — sign in with Firebase identity from the popup result
       const email = fbUser.email ?? ''
       const name = fbUser.displayName ?? email.split('@')[0]
       persistUser({ email, name, uid: fbUser.uid, googleId: fbUser.uid })

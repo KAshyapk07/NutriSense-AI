@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { useAuth } from './hooks/use-auth'
@@ -27,11 +27,23 @@ function App() {
   const location = useLocation()
 
   const [minSplashDone, setMinSplashDone] = useState(false)
+  const [postAuthSplash, setPostAuthSplash] = useState(false)
+  const prevAuth = useRef(isAuthenticated)
 
   useEffect(() => {
     const timer = setTimeout(() => setMinSplashDone(true), 3000)
     return () => clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    if (!prevAuth.current && isAuthenticated) {
+      setPostAuthSplash(true)
+      const timer = setTimeout(() => setPostAuthSplash(false), 3000)
+      prevAuth.current = isAuthenticated
+      return () => clearTimeout(timer)
+    }
+    prevAuth.current = isAuthenticated
+  }, [isAuthenticated])
 
   const path = location.pathname.replace(/\/+$/, '') || '/'
 
@@ -51,7 +63,7 @@ function App() {
   // ── PC / main app flow ──
   const isAuthPage = AUTH_ROUTES.includes(path)
   const authReady = !loading
-  const showSplash = !isAuthPage && (!minSplashDone || !authReady)
+  const showSplash = !isAuthPage && (!minSplashDone || !authReady || postAuthSplash)
 
   if (!showSplash && !isAuthenticated && !isAuthPage) {
     return <Navigate to="/login" replace state={{ from: location }} />

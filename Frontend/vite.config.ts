@@ -4,8 +4,12 @@ import path from 'path'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 
 export default defineConfig(({ mode }) => ({
-  // Relative asset paths so the app loads correctly from file:// in Electron
-  base: mode === 'production' ? './' : '/',
+  // Electron loads the SPA via file:// — needs relative asset paths ('./').
+  // Azure serves the same SPA at nested routes like /chef-remote (for the
+  // phone QR) — needs absolute asset paths ('/') so that nested routes
+  // resolve /assets/... correctly. The Dockerfile sets VITE_BASE=/ to
+  // switch into server mode; local `npm run build` keeps the Electron default.
+  base: process.env.VITE_BASE ?? (mode === 'production' ? './' : '/'),
   // Centralize env in project-root .env
   envDir: '..',
   plugins: [
@@ -37,49 +41,49 @@ export default defineConfig(({ mode }) => ({
     host: true,
     proxy: {
       '/process': {
-        target: 'https://nutrisense-ai-production.up.railway.app',
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
       },
       '/search': {
-        target: 'https://nutrisense-ai-production.up.railway.app',
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
       },
       '/health': {
-        target: 'https://nutrisense-ai-production.up.railway.app',
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
       },
       '/chat': {
-        target: 'https://nutrisense-ai-production.up.railway.app',
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
       },
       '/chef/': {
-        target: 'https://nutrisense-ai-production.up.railway.app',
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
       },
       '/config': {
-        target: 'https://nutrisense-ai-production.up.railway.app',
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
       },
       '/ws/kitchen': {
-        target: 'wss://nutrisense-ai-production.up.railway.app',
+        target: 'wss://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
         ws: true,
       },
       '/ws/chef-voice': {
-        target: 'wss://nutrisense-ai-production.up.railway.app',
+        target: 'wss://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
         ws: true,
       },
       '/auth': {
-        target: 'https://nutrisense-ai-production.up.railway.app',
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
       },
       '/users': {
-        target: 'https://nutrisense-ai-production.up.railway.app',
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
       },
       '/api': {
-        target: 'https://nutrisense-ai-production.up.railway.app',
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
       },
     },

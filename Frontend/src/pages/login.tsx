@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react'
 import { Logo } from '@/components/ui/logo'
 import { useAuth } from '@/hooks/use-auth'
+import { firebaseAuth } from '@/lib/firebase'
+import { sendPasswordResetEmail } from 'firebase/auth'
 import landingBg from '@/assets/landing-bg.png'
 
 const fadeUp = (delay = 0) => ({
@@ -29,9 +31,9 @@ function toFriendlyError(error: unknown): string {
   if (!(error instanceof Error)) return 'Sign-in failed. Please try again.'
   const code = (error as { code?: string }).code
   if (code && FIREBASE_ERRORS[code]) return FIREBASE_ERRORS[code]
-  // Surface backend/network errors clearly rather than hiding them
   if (error.message.includes('Server error')) return 'Could not reach the server. Please try again.'
-  return 'Sign-in failed. Please try again.'
+  // Temporary: show raw error for debugging
+  return `[${code ?? 'no-code'}] ${error.message}`
 }
 
 export default function LoginPage() {
@@ -45,6 +47,10 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resetMode, setResetMode] = useState(false)
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetSent, setResetSent] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,6 +63,20 @@ export default function LoginPage() {
       setError(toFriendlyError(err))
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setResetLoading(true)
+    try {
+      await sendPasswordResetEmail(firebaseAuth, resetEmail)
+      setResetSent(true)
+    } catch (err) {
+      setError(toFriendlyError(err))
+    } finally {
+      setResetLoading(false)
     }
   }
 
@@ -116,6 +136,65 @@ export default function LoginPage() {
             </motion.div>
           )}
 
+          {/* Forgot password panel */}
+          {resetMode && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-5 rounded-xl bg-white/[0.03] border border-white/[0.08]"
+            >
+              {resetSent ? (
+                <div className="flex items-start gap-3">
+                  <CheckCircle size={16} strokeWidth={1.75} className="flex-shrink-0 mt-0.5 text-white/50" />
+                  <div>
+                    <p className="text-sm text-white/70 font-sans">Reset link sent to <span className="text-white/90">{resetEmail}</span>.</p>
+                    <p className="text-xs text-white/35 font-sans mt-1">Check your inbox and follow the link to reset your password.</p>
+                    <button
+                      type="button"
+                      onClick={() => { setResetMode(false); setResetSent(false); setResetEmail('') }}
+                      className="mt-3 text-[11px] text-white/40 hover:text-white/70 font-sans transition-colors"
+                    >
+                      Back to sign in
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <p className="text-sm text-white/50 font-sans">Enter your email and we'll send a reset link.</p>
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    autoComplete="email"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm
+                      text-white placeholder:text-white/20 font-sans outline-none
+                      focus:border-white/25 transition-all duration-200"
+                  />
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="submit"
+                      disabled={resetLoading}
+                      className="flex-1 bg-white/10 hover:bg-white/15 border border-white/10 text-white/80
+                        font-sans text-sm font-medium py-2.5 rounded-xl transition-all duration-200
+                        disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {resetLoading ? <span className="inline-block h-4 w-4 border-2 border-white/20 border-t-white/70 rounded-full animate-spin mx-auto" /> : 'Send reset link'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setResetMode(false); setError(null) }}
+                      className="text-[11px] text-white/30 hover:text-white/60 font-sans transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          )}
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <motion.div {...fadeUp(0.25)} className="space-y-1.5">
@@ -142,12 +221,13 @@ export default function LoginPage() {
                 <label className="block text-[10px] font-sans font-semibold uppercase tracking-[0.3em] text-white/40">
                   Password
                 </label>
-                <Link
-                  to="#"
+                <button
+                  type="button"
+                  onClick={() => { setResetMode(true); setError(null) }}
                   className="text-[11px] text-white/30 hover:text-white/60 font-sans transition-colors duration-150"
                 >
                   Forgot password?
-                </Link>
+                </button>
               </div>
               <div className="relative">
                 <input

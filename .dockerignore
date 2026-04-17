@@ -50,12 +50,15 @@ pytest.ini
 .coverage
 htmlcov/
 
-# Frontend (separate container/deployment)
-frontend/
+# Frontend — source is needed for the Vite build stage. Exclude heavy
+# host-side artifacts so the build stage produces them fresh inside Docker.
+Frontend/node_modules/
+Frontend/dist/
+Frontend/release/
+Frontend/tsconfig.tsbuildinfo
 AuthHost/
 
-# Build artifacts
-dist/
+# Build artifacts (Python)
 build/
 *.egg-info/
 

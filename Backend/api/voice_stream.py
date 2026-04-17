@@ -927,6 +927,9 @@ async def chef_voice_websocket(websocket: WebSocket, session_id: str) -> None:
                     if phone_ws and phone_ws is not websocket:
                         await _safe_send_json(phone_ws, data)
 
+                elif msg_type == "ping":
+                    await _safe_send_json(websocket, {"type": "pong"})
+
                 elif msg_type == "init-state":
                     # Phone sending its current state for intent context
                     state = data.get("state", {})

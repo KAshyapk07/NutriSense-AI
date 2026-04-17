@@ -73,6 +73,7 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectAttemptRef = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const closedIntentionallyRef = useRef(false)
   const hasConnectedRef = useRef(false)
 
@@ -87,6 +88,18 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
   // ── Derived WebSocket URL ───────────────────────────────────────
 
   const wsUrl = useMemo(() => {
+    // In Electron (file:// protocol), window.location.host is empty so we
+    // must derive the WS host from VITE_API_URL instead.
+    const apiUrl = import.meta.env.VITE_API_URL as string | undefined
+    if (apiUrl) {
+      try {
+        const u = new URL(apiUrl)
+        const proto = u.protocol === 'https:' ? 'wss:' : 'ws:'
+        return `${proto}//${u.host}/ws/chef-voice/${encodeURIComponent(sessionId)}`
+      } catch {
+        // malformed VITE_API_URL — fall through to window.location
+      }
+    }
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     return `${proto}//${window.location.host}/ws/chef-voice/${encodeURIComponent(sessionId)}`
   }, [sessionId])
@@ -235,6 +248,13 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
         initPayload.state = latestStateRef.current
       }
       ws.send(JSON.stringify(initPayload))
+
+      // Keep-alive ping every 25 s — Azure App Service load balancer kills
+      // idle WS connections at ~4 min; this prevents silent drops.
+      if (pingTimerRef.current) clearInterval(pingTimerRef.current)
+      pingTimerRef.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }))
+      }, 25_000)
     }
 
     ws.onmessage = (event: MessageEvent) => {
@@ -251,6 +271,10 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
       // Reset phone presence so peer-joined from the reconnected session
       // re-triggers the state-push effect in chef.tsx.
       setPhoneConnected(false)
+      if (pingTimerRef.current) {
+        clearInterval(pingTimerRef.current)
+        pingTimerRef.current = null
+      }
       if (!closedIntentionallyRef.current) {
         scheduleReconnect()
       }
@@ -294,6 +318,11 @@ export function useHostWebSocket(): UseHostWebSocketReturn {
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
+      }
+
+      if (pingTimerRef.current) {
+        clearInterval(pingTimerRef.current)
+        pingTimerRef.current = null
       }
 
       const ws = wsRef.current

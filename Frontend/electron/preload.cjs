@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('desktopSystem', {
 })
 
 contextBridge.exposeInMainWorld('desktopAuth', {
+  googleSignIn: () => ipcRenderer.invoke('auth:google-sign-in'),
   openSystemBrowser: (url) => ipcRenderer.invoke('auth:open-system-browser', url),
   storeRefreshToken: (token) => ipcRenderer.invoke('auth:store-refresh-token', token),
   getRefreshToken: () => ipcRenderer.invoke('auth:get-refresh-token'),

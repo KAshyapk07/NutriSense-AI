@@ -110,6 +110,7 @@ export function useAudioWebSocket({
   const vadRef = useRef<import('@ricky0123/vad-web').MicVAD | null>(null)
   const reconnectAttemptRef = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const intentCallbackRef = useRef<((intent: ChefIntentResponse) => void) | null>(null)
   /** Prevents reconnect loops after intentional close (unmount). */
   const closedIntentionallyRef = useRef(false)
@@ -253,6 +254,12 @@ export function useAudioWebSocket({
         initPayload.state = initialState
       }
       ws.send(JSON.stringify(initPayload))
+
+      // Keep-alive ping every 25 s to prevent Azure idle timeout drops
+      if (pingTimerRef.current) clearInterval(pingTimerRef.current)
+      pingTimerRef.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }))
+      }, 25_000)
     }
 
     ws.onmessage = (event: MessageEvent) => {
@@ -265,8 +272,11 @@ export function useAudioWebSocket({
       }
     }
 
-    ws.onclose = (event) => {
-      // Only attempt reconnect if we didn't intentionally close
+    ws.onclose = () => {
+      if (pingTimerRef.current) {
+        clearInterval(pingTimerRef.current)
+        pingTimerRef.current = null
+      }
       if (!closedIntentionallyRef.current) {
         setConnectionStatus('disconnected')
         scheduleReconnect()
@@ -320,6 +330,11 @@ export function useAudioWebSocket({
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
+      }
+
+      if (pingTimerRef.current) {
+        clearInterval(pingTimerRef.current)
+        pingTimerRef.current = null
       }
 
       // Close WebSocket

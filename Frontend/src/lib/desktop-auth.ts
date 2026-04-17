@@ -7,6 +7,7 @@ type AuthSuccessHandler = (payload: DeepLinkAuthPayload) => void
 declare global {
   interface Window {
     desktopAuth?: {
+      googleSignIn: () => Promise<{ idToken: string }>
       openSystemBrowser: (url: string) => Promise<void>
       storeRefreshToken: (token: string) => Promise<void>
       getRefreshToken: () => Promise<string | null>
