@@ -9,6 +9,8 @@ Src/Image_classifier/models/meta.json
 *.keras
 *.pb
 
+#Extension 
+*.zip
 # Environment and secrets
 .env
 .env.*

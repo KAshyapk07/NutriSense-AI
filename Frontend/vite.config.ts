@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // Relative asset paths so the app loads correctly from file:// in Electron
+  base: mode === 'production' ? './' : '/',
   // Centralize env in project-root .env
   envDir: '..',
   plugins: [
@@ -82,4 +84,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

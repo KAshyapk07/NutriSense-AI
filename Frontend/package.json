@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "desktop": "electron ./electron/main.cjs"
+    "desktop": "electron ./electron/main.cjs",
+    "postinstall": "electron-builder install-app-deps",
+    "dist:win": "npm run build && electron-builder --win"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.4",
@@ -32,10 +34,42 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "electron": "^31.7.7",
+    "electron-builder": "^25.1.8",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.7.0",
     "vite": "^6.0.0",
     "vite-plugin-static-copy": "^2.0.0"
+  },
+  "build": {
+    "appId": "com.nutrisense.app",
+    "productName": "NutriSense AI",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build-assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build-assets/icon.ico",
+      "uninstallerIcon": "build-assets/icon.ico"
+    },
+    "protocols": {
+      "name": "nutrisense",
+      "schemes": [
+        "nutrisense"
+      ]
+    }
   }
 }

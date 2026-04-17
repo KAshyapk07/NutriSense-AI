@@ -185,16 +185,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   // ── Auth state ──
   if (msg.type === 'GET_AUTH_STATE') {
-    ;(async () => {
-      const data = await chrome.storage.local.get(['authUser', 'refreshToken', 'accessToken'])
-      // Wake the backend in parallel so it's ready when the user signs in
-      warmupBackend()
+    chrome.storage.local.get(['authUser', 'refreshToken', 'accessToken'], (data) =>
       sendResponse({
         user: data.authUser || null,
         hasToken: !!data.refreshToken,
         isConnected: !!data.refreshToken,
       })
-    })()
+    )
     return true
   }
 
@@ -214,15 +211,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   // ── Firebase email/password login ──
   if (msg.type === 'LOGIN_EMAIL') {
     ;(async () => {
-      const base = await getBase()
       try {
-        const fbRes = await fetch(
+        const base = await getBase()
+        const fbRes = await fetchWithTimeout(
           `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: msg.email, password: msg.password, returnSecureToken: true }),
-          }
+          },
+          10000
         )
         if (!fbRes.ok) {
           const err = await fbRes.json().catch(() => ({}))
@@ -234,7 +232,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
           body: JSON.stringify({ firebase_id_token: idToken }),
-        })
+        }, 60000)
         if (!nsRes.ok) throw new Error(`Auth failed: ${nsRes.status}`)
         const { access_token, refresh_token } = await nsRes.json()
 
@@ -256,16 +254,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   // ── Firebase email/password registration ──
   if (msg.type === 'REGISTER_EMAIL') {
     ;(async () => {
-      const base = await getBase()
       try {
+        const base = await getBase()
         // Step 1: Create Firebase account
-        const signUpRes = await fetch(
+        const signUpRes = await fetchWithTimeout(
           `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`,
           {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: msg.email, password: msg.password, returnSecureToken: true }),
-          }
+          },
+          10000
         )
         if (!signUpRes.ok) {
           const err = await signUpRes.json().catch(() => ({}))
@@ -294,7 +293,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
           body: JSON.stringify({ firebase_id_token: idToken }),
-        })
+        }, 60000)
         if (!nsRes.ok) throw new Error(`Auth failed: ${nsRes.status}`)
         const { access_token, refresh_token } = await nsRes.json()
 
@@ -526,7 +525,7 @@ async function signInWithGoogle() {
     method:  'POST',
     headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
     body: JSON.stringify({ firebase_id_token: idToken }),
-  })
+  }, 60000)
   if (!nsRes.ok) throw new Error(`Backend auth failed: ${nsRes.status}`)
   const { access_token, refresh_token } = await nsRes.json()
 
@@ -575,6 +574,7 @@ function friendlyFirebaseError(msg) {
   if (msg.includes('TOO_MANY_ATTEMPTS')) return 'Too many attempts. Try again later.'
   if (msg.includes('MISSING_PASSWORD'))  return 'Please enter your password.'
   if (msg.includes('WEAK_PASSWORD'))     return 'Password is too weak.'
+  if (msg.includes('timed out'))         return 'Server is starting up — please try again in a moment.'
   if (msg.includes('Auth failed'))       return 'Could not reach NutriSense. Check your connection.'
   if (msg.includes('access_denied') || msg.includes('not approve')) return 'Google sign-in was cancelled.'
   if (msg.includes('cancelled') || msg.includes('cancel')) return 'Sign-in was cancelled.'
