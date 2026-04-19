@@ -57,6 +57,9 @@ COPY --from=frontend-builder /frontend/dist ./frontend/dist
 RUN mkdir -p Src/Image_classifier/models && \
     python -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='Kashyapk07/NutriSense_ConvNext_Small_Best', filename='nutrisense_convnext_small_best.pth', local_dir='Src/Image_classifier/models')"
 
+# Pre-download Whisper model so container startup doesn't block on network I/O
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small.en', device='cpu', compute_type='int8')"
+
 RUN mkdir -p temp_uploads
 
 EXPOSE 8000

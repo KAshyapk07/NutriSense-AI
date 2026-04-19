@@ -14,7 +14,8 @@ import timm
 logger = logging.getLogger(__name__)
 
 MODEL_PATH = os.getenv(
-    "MODEL_PATH", r"Src\Image_classifier\models\nutrisense_convnext_small_best.pth"
+    "MODEL_PATH",
+    os.path.join("Src", "Image_classifier", "models", "nutrisense_convnext_small_best.pth"),
 )
 
 _INFERENCE_TRANSFORM = T.Compose([

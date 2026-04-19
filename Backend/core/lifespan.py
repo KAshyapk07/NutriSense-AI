@@ -48,6 +48,16 @@ async def lifespan(app: FastAPI):
 
     router_dep.init()
 
+    # Pre-warm Whisper STT model so the first voice command isn't delayed
+    # by a cold model load (downloading + loading ~76 MB takes 1-3 min on CPU).
+    if os.getenv("STT_BACKEND", "faster-whisper") == "faster-whisper":
+        try:
+            from Backend.api.voice_stream import _get_whisper_model
+            await _get_whisper_model()
+            logger.info("Whisper STT model pre-warmed.")
+        except Exception as exc:
+            logger.warning("Whisper pre-warm failed (non-fatal): %s", exc)
+
     logger.info("Startup complete. Ready to serve requests.")
 
     yield

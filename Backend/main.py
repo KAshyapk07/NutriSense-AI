@@ -59,7 +59,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # ── CORS middleware ──────────────────────────────────────────────────
 # Production: set ALLOWED_ORIGINS=app://.,http://localhost:5173 in .env
 # Default allows localhost dev only; use "*" explicitly to open up.
-_DEFAULT_ORIGINS = "http://localhost:5173,http://localhost:8000"
+_DEFAULT_ORIGINS = "http://localhost:5173,http://localhost:8000,app://."
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(","),

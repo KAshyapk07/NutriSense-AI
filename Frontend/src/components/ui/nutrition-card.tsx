@@ -183,7 +183,7 @@ export function NutritionCard({
             <Badge>{Math.round(confidence * 100)}% Confidence</Badge>
           )}
           {accuracy != null && accuracy > 0 && (
-            <Badge>{Math.round(accuracy * 100)}% Accuracy</Badge>
+            <Badge>{Math.round(accuracy)}% Accuracy</Badge>
           )}
           {estimated && <Badge variant="outline">Estimated</Badge>}
           {source && <Badge variant="outline">{source}</Badge>}

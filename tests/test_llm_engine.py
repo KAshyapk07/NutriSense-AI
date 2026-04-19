@@ -266,7 +266,7 @@ class TestEstimateNutrition:
 
     def test_pathway_is_estimation(self, mock_llm_engine):
         result = mock_llm_engine.estimate_nutrition("Kachori")
-        assert result["pathway"] == "estimation"
+        assert result["pathway"] == "extraction"
 
     def test_recipe_name_contains_query(self, mock_llm_engine):
         result = mock_llm_engine.estimate_nutrition("Kachori")

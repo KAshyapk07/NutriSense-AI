@@ -9,8 +9,6 @@ from Backend.core.config import settings
 from Backend.dependencies.auth_user import get_optional_user
 from Backend.dependencies.neo4j import get_neo4j_client
 from Backend.dependencies.router import get_router
-from Backend.schemas.process import ProcessResponse
-
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Process"])
 
@@ -20,7 +18,7 @@ def _validate_extension(filename: str) -> bool:
     return ext in settings.allowed_extensions
 
 
-@router.post("/process", response_model=ProcessResponse)
+@router.post("/process")
 async def process(
     background_tasks: BackgroundTasks,
     query: Optional[str] = Form(None),

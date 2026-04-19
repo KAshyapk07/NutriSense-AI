@@ -8,7 +8,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeftRight, ChevronDown } from 'lucide-react'
+import { ArrowLeftRight, ArrowRight } from 'lucide-react'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
 
@@ -96,8 +96,8 @@ export default function ComparePage() {
               onSubmit={handleSubmit}
               className="flex flex-col gap-4"
             >
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-                {/* Food A */}
+              {/* Food inputs row */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_1fr]">
                 <FoodInputCard
                   label="First food"
                   placeholder="e.g. Butter Chicken"
@@ -107,14 +107,14 @@ export default function ComparePage() {
                   onTypeChange={(t) => setFoodA((p) => ({ ...p, type: t }))}
                 />
 
-                {/* VS divider */}
-                <div className="flex items-center justify-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]">
-                    <ArrowLeftRight size={16} className="text-[var(--color-text-muted)]" />
+                {/* VS badge */}
+                <div className="flex items-end justify-center pb-1">
+                  <div className="flex h-11 w-11 flex-col items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]">
+                    <ArrowLeftRight size={13} className="text-[var(--color-accent)]" />
+                    <span className="text-[9px] font-bold tracking-widest text-[var(--color-text-muted)] mt-0.5">VS</span>
                   </div>
                 </div>
 
-                {/* Food B */}
                 <FoodInputCard
                   label="Second food"
                   placeholder="e.g. Paneer Tikka"
@@ -126,20 +126,19 @@ export default function ComparePage() {
               </div>
 
               {/* Submit */}
-              <div className="flex justify-center pt-2">
-                <button
-                  type="submit"
-                  disabled={!canSubmit}
-                  className={cn(
-                    'inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-semibold transition-all',
-                    canSubmit
-                      ? 'bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:opacity-90 shadow-lg shadow-[var(--color-accent)]/20'
-                      : 'bg-[var(--color-border)] text-[var(--color-text-muted)] cursor-not-allowed',
-                  )}
-                >
-                  Compare
-                </button>
-              </div>
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                className={cn(
+                  'mt-2 w-full inline-flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold transition-all duration-200',
+                  canSubmit
+                    ? 'bg-[var(--color-accent)] text-[var(--color-accent-contrast)] hover:opacity-90 shadow-lg shadow-[var(--color-accent)]/25 active:scale-[0.98]'
+                    : 'bg-[var(--color-border)] text-[var(--color-text-muted)] cursor-not-allowed opacity-50',
+                )}
+              >
+                Compare
+                <ArrowRight size={15} />
+              </button>
             </motion.form>
           </div>
 
@@ -206,55 +205,47 @@ function FoodInputCard({
   onChange: (v: string) => void
   onTypeChange: (t: FoodType) => void
 }) {
-  const [typeOpen, setTypeOpen] = useState(false)
   const types: FoodType[] = ['Recipe', 'Product']
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
-        {label}
-      </label>
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden focus-within:border-[var(--color-accent)]/50 transition-colors">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="w-full bg-transparent px-4 pt-3 pb-2 text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)] outline-none"
-        />
-        <div className="relative flex items-center border-t border-[var(--color-border)] px-3 py-1.5">
-          <button
-            type="button"
-            onClick={() => setTypeOpen((p) => !p)}
-            className="flex items-center gap-1 text-xs font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
-          >
-            {foodType}
-            <ChevronDown size={10} />
-          </button>
-          {typeOpen && (
-            <div className="absolute left-3 bottom-full mb-1 z-20 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl overflow-hidden">
-              {types.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => {
-                    onTypeChange(t)
-                    setTypeOpen(false)
-                  }}
-                  className={cn(
-                    'block w-full px-4 py-2 text-left text-xs hover:bg-[var(--color-border)]/30 transition-colors',
-                    t === foodType
-                      ? 'font-semibold text-[var(--color-accent)]'
-                      : 'text-[var(--color-text-muted)]',
-                  )}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          )}
+      {/* Label + type toggle row */}
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
+          {label}
+        </label>
+        <div className="flex rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-bg)]">
+          {types.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onTypeChange(t)}
+              className={cn(
+                'px-3 py-1 text-xs font-medium transition-all duration-150',
+                t === foodType
+                  ? 'bg-[var(--color-accent)] text-[var(--color-accent-contrast)]'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+              )}
+            >
+              {t}
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* Input */}
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={cn(
+          'w-full rounded-2xl border bg-[var(--color-surface)]',
+          'px-4 py-4 text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)]',
+          'outline-none transition-colors duration-150',
+          'border-[var(--color-border)] focus:border-[var(--color-accent)]/60',
+        )}
+      />
     </div>
   )
 }

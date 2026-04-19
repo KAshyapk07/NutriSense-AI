@@ -157,51 +157,46 @@ FORMAT YOUR RESPONSE CLEARLY WITH SECTIONS:
         
         estimation_note = ""
         if is_a_estimated and is_b_estimated:
-            estimation_note = "\n NOTE: Both dishes use estimated nutrition values based on typical recipes."
+            estimation_note = "⚠ Both sets of values are estimates — actual nutrition may vary by recipe or brand."
         elif is_a_estimated:
-            estimation_note = f"\n NOTE: {dish_a} uses estimated nutrition values."
+            estimation_note = f"⚠ {dish_a} values are estimated — actual nutrition may vary."
         elif is_b_estimated:
-            estimation_note = f"\n NOTE: {dish_b} uses estimated nutrition values."
+            estimation_note = f"⚠ {dish_b} values are estimated — actual nutrition may vary."
 
-        prompt = f"""You are a nutrition expert comparing two dishes. Use the provided data.
+        goal_label = user_goal if user_goal else "general healthy eating"
 
-DISH A: {dish_a}
-Nutrition (per serving):
+        prompt = f"""You are NutriSense AI, a nutrition intelligence assistant. Compare two foods using ONLY the data provided below. Never invent numbers.
+
+FOOD A — {dish_a}
 {self._format_nutrition(nutrition_a)}
 
-DISH B: {dish_b}
-Nutrition (per serving):
+FOOD B — {dish_b}
 {self._format_nutrition(nutrition_b)}
 
-USER GOAL: {user_goal if user_goal else "General healthy eating"}
+HEALTH GOAL: {goal_label}
 {estimation_note}
 
-IMPORTANT RULES:
-- Use ONLY the provided nutrition values
-- Do NOT invent numbers
-- Compare based on the user's goal
-- Mention trade-offs
-{"- Note that some values are estimates and may vary by recipe" if (is_a_estimated or is_b_estimated) else ""}
+Write a focused, decisive comparison. Cite the actual values from the data. Be specific — users are making a food choice right now.
 
-FORMAT YOUR RESPONSE WITH CLEAR SECTIONS:
+Use exactly these sections:
 
-**Summary:**
-[Brief comparison of both dishes]
+**Quick Verdict**
+One sentence naming the better choice for {goal_label} and the single strongest reason.
 
-**For {user_goal if user_goal else "general health"}:**
-[Which dish is better and why]
+**Nutritional Breakdown**
+Compare each nutrient directly using the numbers above:
+- Calories: [A value] vs [B value] — [which is lower/higher and what it means]
+- Protein: [A value] vs [B value] — [satiety/muscle impact]
+- Carbohydrates: [A value] vs [B value] — [energy/blood sugar impact]
+- Fats: [A value] vs [B value] — [note if saturated fat data is available]
+- Fibre: [A value] vs [B value] — [digestion/satiety impact]
 
-**Key Differences:**
-- Calories: [comparison]
-- Protein: [comparison]  
-- Carbs: [comparison]
-- Fats: [comparison]
+**What This Means For You**
+2–3 sentences: practical context for someone with the goal of {goal_label}. When should they pick A? When should they pick B?
 
-**Trade-offs:**
-[What you gain/lose with each choice]
-
-**Recommendation:**
-[Final verdict]
+**Bottom Line**
+Choose **{dish_a}** if [specific condition].
+Choose **{dish_b}** if [specific condition].
 """
 
         response = self.llm.generate(prompt)
@@ -273,7 +268,7 @@ These values are estimates. For precise nutrition data, consult a nutritionist o
             "ingredients": "See estimated details below",
             "instructions": "Not available - estimated dish",
             "llm_response": response,
-            "pathway": "estimation",
+            "pathway": "extraction",
             "estimated": True,
             "accuracy": 50.0,
             "source": "llm_estimation"
@@ -395,51 +390,46 @@ FORMAT YOUR RESPONSE CLEARLY WITH SECTIONS:
     ) -> dict:
         estimation_note = ""
         if is_a_estimated and is_b_estimated:
-            estimation_note = "\n NOTE: Both dishes use estimated nutrition values based on typical recipes."
+            estimation_note = "⚠ Both sets of values are estimates — actual nutrition may vary by recipe or brand."
         elif is_a_estimated:
-            estimation_note = f"\n NOTE: {dish_a} uses estimated nutrition values."
+            estimation_note = f"⚠ {dish_a} values are estimated — actual nutrition may vary."
         elif is_b_estimated:
-            estimation_note = f"\n NOTE: {dish_b} uses estimated nutrition values."
+            estimation_note = f"⚠ {dish_b} values are estimated — actual nutrition may vary."
 
-        prompt = f"""You are a nutrition expert comparing two dishes. Use the provided data.
+        goal_label = user_goal if user_goal else "general healthy eating"
 
-DISH A: {dish_a}
-Nutrition (per serving):
+        prompt = f"""You are NutriSense AI, a nutrition intelligence assistant. Compare two foods using ONLY the data provided below. Never invent numbers.
+
+FOOD A — {dish_a}
 {self._format_nutrition(nutrition_a)}
 
-DISH B: {dish_b}
-Nutrition (per serving):
+FOOD B — {dish_b}
 {self._format_nutrition(nutrition_b)}
 
-USER GOAL: {user_goal if user_goal else "General healthy eating"}
+HEALTH GOAL: {goal_label}
 {estimation_note}
 
-IMPORTANT RULES:
-- Use ONLY the provided nutrition values
-- Do NOT invent numbers
-- Compare based on the user's goal
-- Mention trade-offs
-{"- Note that some values are estimates and may vary by recipe" if (is_a_estimated or is_b_estimated) else ""}
+Write a focused, decisive comparison. Cite the actual values from the data. Be specific — users are making a food choice right now.
 
-FORMAT YOUR RESPONSE WITH CLEAR SECTIONS:
+Use exactly these sections:
 
-**Summary:**
-[Brief comparison of both dishes]
+**Quick Verdict**
+One sentence naming the better choice for {goal_label} and the single strongest reason.
 
-**For {user_goal if user_goal else "general health"}:**
-[Which dish is better and why]
+**Nutritional Breakdown**
+Compare each nutrient directly using the numbers above:
+- Calories: [A value] vs [B value] — [which is lower/higher and what it means]
+- Protein: [A value] vs [B value] — [satiety/muscle impact]
+- Carbohydrates: [A value] vs [B value] — [energy/blood sugar impact]
+- Fats: [A value] vs [B value] — [note if saturated fat data is available]
+- Fibre: [A value] vs [B value] — [digestion/satiety impact]
 
-**Key Differences:**
-- Calories: [comparison]
-- Protein: [comparison]
-- Carbs: [comparison]
-- Fats: [comparison]
+**What This Means For You**
+2–3 sentences: practical context for someone with the goal of {goal_label}. When should they pick A? When should they pick B?
 
-**Trade-offs:**
-[What you gain/lose with each choice]
-
-**Recommendation:**
-[Final verdict]
+**Bottom Line**
+Choose **{dish_a}** if [specific condition].
+Choose **{dish_b}** if [specific condition].
 """
         response = await self.llm.generate_async(prompt)
 
@@ -506,7 +496,7 @@ These values are estimates. For precise nutrition data, consult a nutritionist o
             "ingredients": "See estimated details below",
             "instructions": "Not available - estimated dish",
             "llm_response": response,
-            "pathway": "estimation",
+            "pathway": "extraction",
             "estimated": True,
             "accuracy": 50.0,
             "source": "llm_estimation",

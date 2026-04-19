@@ -57,13 +57,11 @@
       "target": [
         "nsis"
       ],
-      "icon": "build-assets/icon.ico"
+      "icon": "../icon/App_icon.png"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "build-assets/icon.ico",
-      "uninstallerIcon": "build-assets/icon.ico"
+      "allowToChangeInstallationDirectory": true
     },
     "protocols": {
       "name": "nutrisense",

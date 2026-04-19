@@ -154,7 +154,9 @@ async def _get_whisper_model() -> Any:
         device = os.getenv("STT_DEVICE", "cpu")
         compute = os.getenv("STT_COMPUTE_TYPE", "int8")
 
-        _whisper_model = WhisperModel(model_size, device=device, compute_type=compute)
+        _whisper_model = await asyncio.to_thread(
+            WhisperModel, model_size, device=device, compute_type=compute
+        )
         logger.info(
             "faster-whisper model loaded: size=%s device=%s compute=%s",
             model_size,

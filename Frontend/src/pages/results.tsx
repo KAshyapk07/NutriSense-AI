@@ -516,8 +516,8 @@ export default function Results() {
     if (state?.query || state?.image) {
       initialQuerySent.current = true
       sendQuery(state.query ?? '', state.image)
-      // Clear state so refresh doesn't re-trigger
-      window.history.replaceState({}, '')
+      // Clear navigation state so a refresh doesn't re-trigger the query
+      navigate('.', { replace: true, state: null })
     } else if (messages.length === 0) {
       navigate('/')
     }

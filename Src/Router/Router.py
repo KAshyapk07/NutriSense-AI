@@ -162,7 +162,8 @@ class NutriSenseRouter:
     def _extract_dish_for_modify(q: str, keyword: str):
         idx = q.find(keyword)
         before = q[:idx].strip() if idx > 0 else ""
-        for filler in ['make', 'prepare', 'cook', 'give me', 'i want', 'can you', 'how to', 'create']:
+        for filler in ['make', 'prepare', 'cook', 'give me', 'i want', 'can you', 'how to', 'create',
+                        'with', 'that is', 'to be', 'to', 'which is', 'which should be']:
             before = re.sub(rf'\b{filler}\b', '', before, flags=re.IGNORECASE).strip()
         return before if before else q
 
@@ -346,14 +347,14 @@ Return ONLY valid JSON (no markdown, no explanation):
                     out = res["results"][0].copy()
                     out["pathway"] = "extraction"
                     out["cluster"] = res.get("cluster", cluster)
-                    out["accuracy"] = float(score)
+                    out["accuracy"] = float(score * 100)
                     variants = []
                     for r in res["results"][1:4]:
                         v = r.copy()
                         v["pathway"] = "extraction"
                         v["cluster"] = res.get("cluster", cluster)
                         if "confidence" in v:
-                            v["accuracy"] = float(v["confidence"])
+                            v["accuracy"] = float(v["confidence"] * 100)
                         variants.append(v)
                     out["variants"] = variants
                     out["meta"] = {**out.get("meta", {}), "image_predictions": image_predictions}
@@ -587,14 +588,14 @@ Return ONLY valid JSON (no markdown, no explanation):
                     out = res["results"][0].copy()
                     out["pathway"] = "extraction"
                     out["cluster"] = res.get("cluster", cluster)
-                    out["accuracy"] = float(score)
+                    out["accuracy"] = float(score * 100)
                     variants = []
                     for r in res["results"][1:4]:
                         v = r.copy()
                         v["pathway"] = "extraction"
                         v["cluster"] = res.get("cluster", cluster)
                         if "confidence" in v:
-                            v["accuracy"] = float(v["confidence"])
+                            v["accuracy"] = float(v["confidence"] * 100)
                         variants.append(v)
                     out["variants"] = variants
                     out["meta"] = {**out.get("meta", {}), "image_predictions": image_predictions}

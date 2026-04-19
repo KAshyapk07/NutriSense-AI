@@ -43,7 +43,7 @@ class GroqLLMClient:
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3,
-            "max_tokens": 512,
+            "max_tokens": 1500,
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}

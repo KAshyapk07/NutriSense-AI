@@ -9,7 +9,6 @@ import {
   Sliders,
   User,
   Settings,
-  Leaf,
   LogIn,
   LogOut,
   ChevronRight,
@@ -52,12 +51,6 @@ const featureItems: NavItem[] = [
     description: 'Adapt any recipe to your dietary needs',
     icon: Sliders,
     path: '/modify',
-  },
-  {
-    label: 'Healthy Swaps',
-    description: 'Lighter alternatives for your favourite dishes',
-    icon: Leaf,
-    path: '/healthy-swaps',
   },
   {
     label: 'AI Chef Mode',
