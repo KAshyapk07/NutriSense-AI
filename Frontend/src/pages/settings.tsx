@@ -6,19 +6,11 @@ import {
   Moon,
   Leaf,
   AlertTriangle,
-  Bell,
   Shield,
   LogOut,
   LogIn,
   UserPlus,
   Check,
-  Camera,
-  GitCompare,
-  Sliders,
-  ChefHat,
-  Heart,
-  Sparkles,
-  Trash2,
   Info,
 } from 'lucide-react'
 import { Header } from '@/components/layout/header'
@@ -54,16 +46,6 @@ const ALLERGENS: AllergenTag[] = [
   { id: 'mustard',  label: 'Mustard' },
 ]
 
-const APP_FEATURES = [
-  { icon: Camera,     label: 'Photo food identification',       description: 'Point your camera — instantly know what you\'re eating.' },
-  { icon: GitCompare, label: 'Side-by-side meal comparison',    description: 'Compare nutrition across two dishes at a glance.' },
-  { icon: Sliders,    label: 'Recipe modification',             description: 'Adapt any recipe to fit your dietary goals.' },
-  { icon: Leaf,       label: 'Healthier swap suggestions',      description: 'Lighter alternatives for your favourite dishes.' },
-  { icon: ChefHat,    label: 'Interactive cook mode',           description: 'Step-by-step cooking with built-in timers.' },
-  { icon: Heart,      label: '725+ Indian dish database',       description: 'Detailed nutrition info for a wide range of Indian cuisine.' },
-  { icon: Shield,     label: 'Private by design',               description: 'Your searches stay on your device. No data sold.' },
-  { icon: Sparkles,   label: 'AI-powered suggestions',          description: 'Personalised recommendations that learn your tastes.' },
-]
 
 const fadeUp = {
   hidden: { opacity: 0, y: 14 },
@@ -152,21 +134,10 @@ export default function SettingsPage() {
   const { theme, toggle: toggleTheme } = useTheme()
   const { user, isAuthenticated } = useAuth()
   const logout = useLogout()
-  const { prefs, setActiveDiets, setExcludeAllergens, clearAll } = usePreferences()
+  const { prefs, setActiveDiets, setExcludeAllergens } = usePreferences()
 
   const activeDiets     = new Set(prefs.activeDiets)
   const activeAllergens = new Set(prefs.excludeAllergens)
-
-  const [notifications, setNotifications] = useState(
-    () => typeof window !== 'undefined' && localStorage.getItem('nutrisense-notifications') === 'true'
-  )
-
-  const toggleNotifications = () =>
-    setNotifications((v) => {
-      const next = !v
-      localStorage.setItem('nutrisense-notifications', String(next))
-      return next
-    })
 
   const toggleDiet = (id: string) => {
     const next = new Set(activeDiets)
@@ -347,33 +318,11 @@ export default function SettingsPage() {
                 </div>
               }
             />
-            <Row
-              icon={Bell}
-              label="Weekly highlights"
-              description="A weekly summary of your most-searched dishes and nutrition insights"
-              onClick={toggleNotifications}
-              right={<Toggle on={notifications} onToggle={toggleNotifications} />}
-            />
-          </Section>
-        </motion.div>
-
-        {/* ── What NutriSense can do ── */}
-        <motion.div variants={fadeUp} custom={4} initial="hidden" animate="show">
-          <Section title="What NutriSense can do">
-            {APP_FEATURES.map(({ icon: Icon, label, description }) => (
-              <div key={label} className="flex items-start gap-4 px-4 py-3.5">
-                <Icon size={16} strokeWidth={1.75} className="flex-shrink-0 mt-0.5 text-[var(--color-text-muted)]" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-[var(--color-text)]">{label}</p>
-                  <p className="text-xs text-[var(--color-text-muted)] mt-0.5 leading-snug">{description}</p>
-                </div>
-              </div>
-            ))}
           </Section>
         </motion.div>
 
         {/* ── App info ── */}
-        <motion.div variants={fadeUp} custom={5} initial="hidden" animate="show">
+        <motion.div variants={fadeUp} custom={4} initial="hidden" animate="show">
           <Section title="App Info">
             <Row
               icon={Info}
@@ -389,20 +338,8 @@ export default function SettingsPage() {
         </motion.div>
 
         {/* ── Account / Data ── */}
-        <motion.div variants={fadeUp} custom={6} initial="hidden" animate="show">
+        <motion.div variants={fadeUp} custom={5} initial="hidden" animate="show">
           <Section title="Account">
-            <Row
-              icon={Trash2}
-              label="Clear my data"
-              description="Remove all saved preferences and local search history"
-              onClick={() => clearAll()}
-              right={
-                <span className="text-xs text-[var(--color-text-muted)] px-2 py-0.5
-                  rounded-full border border-[var(--color-border)] flex-shrink-0">
-                  Local only
-                </span>
-              }
-            />
             {isAuthenticated ? (
               <Row
                 icon={LogOut}

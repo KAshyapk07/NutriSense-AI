@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback, useRef, type MouseEvent } from 'react'
-import { ChefHat, Star, Clock3, ThumbsUp, ThumbsDown, Sparkles, Eye, Flame, Dumbbell, Wheat, Droplets } from 'lucide-react'
+import { ChefHat, Clock3, ThumbsUp, ThumbsDown, Sparkles, Eye, Flame, Dumbbell, Wheat, Droplets } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { logLiked, logUnliked, logDisliked, logUndisliked, logViewed } from '@/lib/api'
@@ -16,21 +16,6 @@ interface FoodCarouselCardProps {
   ) => void
 }
 
-function StarRating({ rating }: { rating: number }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Star
-          key={i}
-          size={11}
-          className={cn(
-            i < rating ? 'text-amber-400 fill-amber-400' : 'text-white/20 fill-transparent',
-          )}
-        />
-      ))}
-    </div>
-  )
-}
 
 function formatDate(isoString: string): string {
   try {
@@ -284,16 +269,9 @@ export function FoodCarouselCard({
         </div>
 
         {/* Cooked metadata */}
-        {variant === 'cooked' && !item.is_filler && (
-          <div className="mx-6 mt-4 flex items-center justify-between rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5">
-            {item.rating != null ? (
-              <StarRating rating={item.rating} />
-            ) : (
-              <span className="text-[11px] text-white/40">No rating</span>
-            )}
-            {item.cooked_at ? (
-              <span className="text-[11px] text-white/40">{formatDate(item.cooked_at)}</span>
-            ) : null}
+        {variant === 'cooked' && !item.is_filler && item.cooked_at && (
+          <div className="mx-6 mt-4 flex items-center justify-end rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5">
+            <span className="text-[11px] text-white/40">{formatDate(item.cooked_at)}</span>
           </div>
         )}
 

@@ -83,6 +83,22 @@ function CollapsibleSection({
   )
 }
 
+const PLACEHOLDER_PATTERNS = [
+  /^not available/i,
+  /^see (estimated )?details below/i,
+  /^see below/i,
+  /^n\/a$/i,
+  /^estimated dish$/i,
+  /^unknown$/i,
+  /^-$/,
+]
+
+function isPlaceholder(val: string | null | undefined): boolean {
+  if (!val || val.trim() === '') return true
+  const v = val.trim()
+  return PLACEHOLDER_PATTERNS.some((p) => p.test(v))
+}
+
 function formatLLMText(text: string) {
   // Convert **bold** to styled spans, bullets to list items
   const lines = text.split('\n')
@@ -139,19 +155,19 @@ export function NutritionCard({
   llmResponse,
   confidence,
   accuracy,
-  source,
   estimated,
   constraint,
   className,
 }: NutritionCardProps) {
+  const SKIP_KEYS = new Set(['recipe_name', 'name', 'estimated values', 'estimated_values'])
   const nutritionEntries = nutrition
     ? Object.entries(nutrition).filter(
         ([key, value]) =>
-          key.toLowerCase() !== 'recipe_name' &&
-          key.toLowerCase() !== 'name' &&
+          !SKIP_KEYS.has(key.toLowerCase()) &&
           value !== null &&
           value !== undefined &&
-          value !== '',
+          value !== '' &&
+          !isPlaceholder(typeof value === 'string' ? value : null),
       )
     : []
 
@@ -186,7 +202,6 @@ export function NutritionCard({
             <Badge>{Math.round(accuracy)}% Accuracy</Badge>
           )}
           {estimated && <Badge variant="outline">Estimated</Badge>}
-          {source && <Badge variant="outline">{source}</Badge>}
         </div>
       </div>
 
@@ -221,14 +236,14 @@ export function NutritionCard({
       )}
 
       {/* Ingredients */}
-      {ingredients && (
+      {!isPlaceholder(ingredients) && (
         <CollapsibleSection title="Ingredients" defaultOpen>
           {ingredients}
         </CollapsibleSection>
       )}
 
       {/* Instructions */}
-      {instructions && (
+      {!isPlaceholder(instructions) && (
         <CollapsibleSection title="Instructions">
           {instructions}
         </CollapsibleSection>

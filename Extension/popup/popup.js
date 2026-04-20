@@ -265,8 +265,7 @@ btnGoogle.addEventListener('click', async () => {
 // ── Open full app ─────────────────────────────────────────────────────────────
 
 document.getElementById('btn-open-app').addEventListener('click', () => {
-  const hint = document.getElementById('open-app-hint')
-  hint.classList.remove('hidden')
+  chrome.tabs.create({ url: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net' })
 })
 
 // ── Sign out ──────────────────────────────────────────────────────────────────
@@ -501,7 +500,7 @@ function renderExtraction(data) {
         </div>
         <div class="ns-card-meta">
           ${data.confidence != null ? `<span class="ns-conf">${Math.round(data.confidence * 100)}% match</span>` : ''}
-          ${data.source ? `<span class="ns-tag">${h(data.source)}</span>` : ''}
+          ${data.estimated ? `<span class="ns-tag">Estimated</span>` : ''}
         </div>
       </div>
       ${nutritionRows(data.nutrition)}

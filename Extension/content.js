@@ -6,6 +6,12 @@
   if (window.__nutrisenseInjected) return
   window.__nutrisenseInjected = true
 
+  // ── Signal presence to the NutriSense app ────────────────────────────────────
+  // The app's useExtension hook reads these to show "Installed" in the sidebar.
+  document.documentElement.setAttribute('data-nutrisense-ext', '1')
+  window.__nutrisenseExtension = true
+  try { localStorage.setItem('nutrisense-ext-installed', 'true') } catch {}
+
   // ── Styles (isolated inside Shadow DOM) ──────────────────────────────────────
 
   const STYLES = `
@@ -506,7 +512,7 @@
         </div>
         <div class="ns-meta">
           ${data.confidence != null ? `<span class="ns-conf">${Math.round(data.confidence * 100)}% match</span>` : ''}
-          ${data.source ? `<span class="ns-tag">${h(data.source)}</span>` : ''}
+          ${data.estimated ? `<span class="ns-tag">Estimated</span>` : ''}
         </div>
       </div>
       ${nutRows(data.nutrition)}

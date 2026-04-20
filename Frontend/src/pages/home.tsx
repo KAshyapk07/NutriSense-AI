@@ -337,17 +337,6 @@ export default function Home() {
             Intelligent Nutrition Analysis
           </motion.p>
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.6 }}
-            className="mt-5 max-w-lg text-center text-sm text-white/50 leading-relaxed font-sans"
-            style={{ textShadow: '0 1px 8px rgba(0,0,0,0.9)' }}
-          >
-            Search any dish for nutrition facts · Compare two dishes side-by-side ·
-            Modify recipes for your dietary needs · Upload a food photo for instant analysis
-          </motion.p>
-
           {/* Omnibox */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}

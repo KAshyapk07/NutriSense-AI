@@ -33,13 +33,17 @@ chrome.runtime.onInstalled.addListener(async () => {
   const { apiUrl } = await chrome.storage.sync.get(['apiUrl'])
   if (!apiUrl) await chrome.storage.sync.set({ apiUrl: DEFAULT_API_URL })
 
-  chrome.tabs.query({}, (tabs) => {
-    for (const tab of tabs) {
-      if (tab.id && tab.url && /nutrisense|azurewebsites\.net|railway\.app|vercel\.app|localhost:5173/.test(tab.url)) {
-        chrome.tabs.sendMessage(tab.id, { type: 'REQUEST_AUTH_SYNC' }).catch(() => {})
-      }
-    }
-  })
+  // Inject content script into all open tabs so presence signals are set
+  // immediately on install without needing the broad `tabs` permission.
+  // chrome.scripting silently fails on restricted pages (chrome://, etc.).
+  const openTabs = await chrome.tabs.query({})
+  for (const tab of openTabs) {
+    if (!tab.id) continue
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['content.js'],
+    }).catch(() => {})
+  }
 
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
@@ -89,6 +93,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // ── Message handler ───────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+
+  // ── Presence ping (from externally_connectable app page) ──
+  if (msg.type === 'ping') {
+    sendResponse({ ok: true, version: '2.1.0' })
+    return true
+  }
 
   // ── Text query (popup — auth + food detection enforced) ──
   if (msg.type === 'PROCESS_QUERY') {

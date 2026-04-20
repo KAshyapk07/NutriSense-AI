@@ -12,11 +12,15 @@ import {
   LogIn,
   LogOut,
   ChevronRight,
+  Puzzle,
+  Check,
+  ExternalLink,
 } from 'lucide-react'
 import { Logo } from '@/components/ui/logo'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { useSidebar } from '@/hooks/use-sidebar'
 import { useAuth, useLogout } from '@/hooks/use-auth'
+import { useExtension } from '@/hooks/use-extension'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -75,6 +79,7 @@ export function Sidebar() {
   const location = useLocation()
   const { user, isAuthenticated } = useAuth()
   const logout = useLogout()
+  const { installed, storeUrl } = useExtension()
 
   const handleNav = (path: string) => {
     navigate(path)
@@ -191,6 +196,63 @@ export function Sidebar() {
                     )
                   })}
                 </ul>
+              </section>
+
+              {/* ── Chrome Extension ── */}
+              <section>
+                <p className="px-2 mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+                  Extension
+                </p>
+                {installed ? (
+                  <div className={cn(
+                    'flex items-center gap-3 px-3 py-3 rounded-xl',
+                    'bg-[var(--color-bg)] border border-[var(--color-border)]',
+                  )}>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0
+                      bg-emerald-500/10 border border-emerald-500/20">
+                      <Check size={15} strokeWidth={2} className="text-emerald-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-[var(--color-text)] leading-none">
+                        Extension installed
+                      </p>
+                      <p className="text-[11px] text-[var(--color-text-muted)] mt-1 leading-none">
+                        NutriSense for Chrome
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <a
+                    href={storeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={closeSidebar}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-3 rounded-xl w-full',
+                      'bg-[var(--color-bg)] border border-[var(--color-border)]',
+                      'hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-accent)]/5',
+                      'transition-colors duration-150 group',
+                    )}
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0
+                      bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20">
+                      <Puzzle size={15} strokeWidth={1.75} className="text-[var(--color-accent)]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-[var(--color-text)] leading-none">
+                        Get the extension
+                      </p>
+                      <p className="text-[11px] text-[var(--color-text-muted)] mt-1 leading-none">
+                        NutriSense for Chrome
+                      </p>
+                    </div>
+                    <ExternalLink
+                      size={13}
+                      strokeWidth={1.75}
+                      className="flex-shrink-0 text-[var(--color-text-muted)] group-hover:text-[var(--color-accent)] transition-colors"
+                    />
+                  </a>
+                )}
               </section>
 
               {/* ── Account ── */}
