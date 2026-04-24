@@ -243,14 +243,33 @@ btnGoogle.addEventListener('click', async () => {
   btnGoogle.innerHTML = `<svg class="btn-spinner" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-opacity="0.25" stroke-width="1.5"/><path d="M7 1.5A5.5 5.5 0 0 1 12.5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Signing in…</span>`
   loginError.classList.add('hidden')
 
+  // After 8s hint that we're waiting for the Google popup to complete
+  const hintTimer = setTimeout(() => {
+    if (btnGoogle.disabled) {
+      btnGoogle.innerHTML = `<svg class="btn-spinner" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-opacity="0.25" stroke-width="1.5"/><path d="M7 1.5A5.5 5.5 0 0 1 12.5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span>Waiting for Google…</span>`
+    }
+  }, 8000)
+
   let res
   try {
     res = await chrome.runtime.sendMessage({ type: 'LOGIN_GOOGLE' })
   } catch {
-    // Popup lost focus and closed during auth — user can reopen to see result
+    // Extension popup closed while auth window was open. Re-check auth state —
+    // the background may have completed sign-in successfully.
+    clearTimeout(hintTimer)
+    btnGoogle.disabled  = false
+    btnGoogle.innerHTML = originalHTML
+    const state = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }).catch(() => null)
+    if (state?.isConnected && state?.user) {
+      showConnected(state.user)
+    } else {
+      loginError.textContent = 'Sign-in window closed. Please try again.'
+      loginError.classList.remove('hidden')
+    }
     return
   }
 
+  clearTimeout(hintTimer)
   btnGoogle.disabled  = false
   btnGoogle.innerHTML = originalHTML
 

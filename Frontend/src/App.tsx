@@ -19,6 +19,7 @@ import Settings from './pages/settings'
 import LoginPage from './pages/login'
 import RegisterPage from './pages/register'
 import { Sidebar } from './components/layout/sidebar'
+import { TitleBar } from './components/layout/title-bar'
 
 const AUTH_ROUTES = ['/login', '/register']
 
@@ -51,12 +52,15 @@ function App() {
   // Phone scans QR → splash for 3s → chef-remote UI. Zero auth dependency.
   if (path.startsWith('/chef-remote')) {
     return (
-      <>
-        <AnimatePresence>
-          {!minSplashDone && <LoadingScreen />}
-        </AnimatePresence>
-        <ChefRemotePage />
-      </>
+      <div className="flex flex-col h-screen">
+        <TitleBar />
+        <div className="flex-1 overflow-y-auto relative">
+          <AnimatePresence>
+            {!minSplashDone && <LoadingScreen />}
+          </AnimatePresence>
+          <ChefRemotePage />
+        </div>
+      </div>
     )
   }
 
@@ -74,31 +78,34 @@ function App() {
   }
 
   return (
-    <>
-      <AnimatePresence>
-        {showSplash && <LoadingScreen />}
-      </AnimatePresence>
+    <div className="flex flex-col h-screen">
+      <TitleBar />
+      <div className="flex-1 overflow-y-auto relative">
+        <AnimatePresence>
+          {showSplash && <LoadingScreen />}
+        </AnimatePresence>
 
-      {!isAuthPage && <Sidebar />}
+        {!isAuthPage && <Sidebar />}
 
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/results" element={<Results />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/product-chat" element={<ProductChatPage />} />
-        <Route path="/image" element={<ImagePage />} />
-        <Route path="/compare" element={<ComparePage />} />
-        <Route path="/modify" element={<ModifyPage />} />
-        <Route path="/healthy-swaps" element={<HealthySwapsPage />} />
-        <Route path="/chef" element={<ChefPage />} />
-        <Route path="/chef-remote" element={<ChefRemotePage />} />
-        <Route path="/kitchen" element={<KitchenPage />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/settings" element={<Settings />} />
-      </Routes>
-    </>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/results" element={<Results />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/product-chat" element={<ProductChatPage />} />
+          <Route path="/image" element={<ImagePage />} />
+          <Route path="/compare" element={<ComparePage />} />
+          <Route path="/modify" element={<ModifyPage />} />
+          <Route path="/healthy-swaps" element={<HealthySwapsPage />} />
+          <Route path="/chef" element={<ChefPage />} />
+          <Route path="/chef-remote" element={<ChefRemotePage />} />
+          <Route path="/kitchen" element={<KitchenPage />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </div>
+    </div>
   )
 }
 

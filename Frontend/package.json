@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "desktop": "electron ./electron/main.cjs",
     "postinstall": "electron-builder install-app-deps",
-    "dist:win": "npm run build && electron-builder --win"
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "dist:appx": "npm run build && electron-builder --win appx",
+    "dist:all": "npm run build && electron-builder --win nsis appx"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.4",
@@ -55,9 +57,19 @@
     ],
     "win": {
       "target": [
-        "nsis"
+        "nsis",
+        "appx"
       ],
       "icon": "../icon/App_icon.png"
+    },
+    "appx": {
+      "identityName": "KashyapK.NutriSenseAI",
+      "publisherDisplayName": "Kashyap K",
+      "publisher": "CN=C75F388C-2B85-47E0-986B-E7E392BF26C8",
+      "applicationId": "NutriSenseAI",
+      "displayName": "NutriSense AI",
+      "backgroundColor": "#0d0e11",
+      "languages": ["en-US"]
     },
     "nsis": {
       "oneClick": false,

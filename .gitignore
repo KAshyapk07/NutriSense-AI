@@ -56,10 +56,15 @@ Thumbs.db
 
 # Frontend build artifacts and local dependencies
 frontend/node_modules/
+Frontend/node_modules/
 frontend/dist/
+Frontend/dist/
+frontend/release/
+Frontend/release/
 frontend/.env
 frontend/.env.local
 frontend/.env.*.local
+*.tsbuildinfo
 
 # Logs
 *.log
@@ -72,7 +77,6 @@ docker-compose.override.yml
 
 # Docs (local reference only, not needed in repo)
 Docs/
-PROJECT_STATUS_AND_ROADMAP.md
 
 # Legacy
 structure
@@ -82,3 +86,6 @@ structure
 .env.staging
 render.yaml
 railway.json
+
+MICROSOFT_STORE_SUBMISSION.md
+PROJECT_STATUS_AND_ROADMAP.md

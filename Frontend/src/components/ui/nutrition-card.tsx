@@ -99,7 +99,7 @@ function isPlaceholder(val: string | null | undefined): boolean {
   return PLACEHOLDER_PATTERNS.some((p) => p.test(v))
 }
 
-function formatLLMText(text: string) {
+export function formatLLMText(text: string) {
   // Convert **bold** to styled spans, bullets to list items
   const lines = text.split('\n')
   return lines.map((line, i) => {

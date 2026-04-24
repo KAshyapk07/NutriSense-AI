@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron')
 const path = require('path')
 const os = require('os')
 const fs = require('fs')
@@ -18,8 +18,11 @@ const DESKTOP_CLIENT_ID = '41453765044-9nt3ti03gu5f1ur8bj2t9kfhnhhs22i1.apps.goo
 // native/installed apps — embedding them is explicitly allowed.
 function readEnvSecret(key) {
   try {
-    const envPath = path.join(__dirname, '..', '..', '.env')
-    const content = fs.readFileSync(envPath, 'utf8')
+    // In packaged app, look next to the exe; in dev, look at project root
+    const base = app.isPackaged
+      ? path.dirname(app.getPath('exe'))
+      : path.join(__dirname, '..', '..')
+    const content = fs.readFileSync(path.join(base, '.env'), 'utf8')
     const match = content.match(new RegExp(`^${key}=(.+)$`, 'm'))
     return match ? match[1].trim() : null
   } catch {
@@ -216,12 +219,15 @@ function handleDeepLink(rawUrl) {
 
 // ── Window ─────────────────────────────────────────────────────────────────
 function createWindow() {
+  Menu.setApplicationMenu(null)
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 1024,
     minHeight: 640,
     icon: path.join(__dirname, '../../icon/App_icon.png'),
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -229,6 +235,19 @@ function createWindow() {
       sandbox: true,
     },
   })
+
+  mainWindow.maximize()
+
+  mainWindow.on('maximize', () => mainWindow.webContents.send('window:maximized', true))
+  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximized', false))
+
+  ipcMain.handle('window:minimize', () => mainWindow?.minimize())
+  ipcMain.handle('window:maximize', () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize()
+    else mainWindow?.maximize()
+  })
+  ipcMain.handle('window:close', () => mainWindow?.close())
+  ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false)
 
   if (app.isPackaged) {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))

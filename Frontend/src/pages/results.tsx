@@ -28,7 +28,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { Header } from '@/components/layout/header'
-import { NutritionCard } from '@/components/ui/nutrition-card'
+import { NutritionCard, formatLLMText } from '@/components/ui/nutrition-card'
 import { ComparisonView } from '@/components/ui/comparison-view'
 import { SearchResultCard } from '@/components/ui/search-result-card'
 import { SkeletonLoader } from '@/components/ui/skeleton-loader'
@@ -140,9 +140,9 @@ function SearchResultsInline({ data }: { data: RouterSearchResponse }) {
   return (
     <div className="flex flex-col gap-6 w-full">
       {data.llm_response && (
-        <p className="text-sm text-[var(--color-text-muted)] leading-relaxed px-1">
-          {data.llm_response}
-        </p>
+        <div className="text-sm text-[var(--color-text-muted)] leading-relaxed px-1">
+          {formatLLMText(data.llm_response)}
+        </div>
       )}
       {recipeResults.length > 0 && (
         <div>
@@ -233,8 +233,8 @@ function AiBubble({
         className="flex flex-col gap-4 w-full max-w-screen-xl"
       >
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-          <div className="prose prose-sm dark:prose-invert max-w-none text-[var(--color-text)] whitespace-pre-wrap">
-            {chatReply}
+          <div className="text-sm leading-relaxed text-[var(--color-text)]">
+            {formatLLMText(chatReply)}
           </div>
         </div>
       </motion.div>

@@ -195,6 +195,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   // ── Auth state ──
   if (msg.type === 'GET_AUTH_STATE') {
+    warmupBackend() // fire-and-forget: pre-warm Azure so auth is fast when user clicks
     chrome.storage.local.get(['authUser', 'refreshToken', 'accessToken'], (data) =>
       sendResponse({
         user: data.authUser || null,
@@ -209,7 +210,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'LOGIN_GOOGLE') {
     ;(async () => {
       try {
-        const user = await signInWithGoogle()
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('auth/timeout')), 3 * 60 * 1000)
+        )
+        const user = await Promise.race([signInWithGoogle(), timeout])
         sendResponse({ ok: true, user })
       } catch (err) {
         sendResponse({ ok: false, error: friendlyFirebaseError(err.message) })

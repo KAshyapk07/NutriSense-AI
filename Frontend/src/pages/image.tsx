@@ -122,7 +122,7 @@ export default function ImagePage() {
               <ol className="space-y-4">
                 {[
                   { step: '01', text: 'Upload a photo of any Indian dish' },
-                  { step: '02', text: 'EfficientNet-B4 model identifies the dish from 148 classes' },
+                  { step: '02', text: 'ConvNeXt model identifies the dish from 239 classes' },
                   { step: '03', text: 'Full nutritional profile retrieved from the knowledge graph' },
                   { step: '04', text: 'LLM provides analysis and ingredient breakdown' },
                 ].map(({ step, text }) => (
@@ -133,22 +133,7 @@ export default function ImagePage() {
                 ))}
               </ol>
             </div>
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-4">Model details</h3>
-              <div className="space-y-3">
-                {[
-                  { label: 'Architecture', value: 'EfficientNet-B4' },
-                  { label: 'Food classes', value: '148' },
-                  { label: 'Training images', value: '20,136' },
-                  { label: 'Input resolution', value: '256×256' },
-                ].map(({ label, value }) => (
-                  <div key={label} className="flex justify-between items-center text-sm">
-                    <span className="text-[var(--color-text-muted)]">{label}</span>
-                    <span className="font-semibold text-[var(--color-text)] tabular-nums">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+
             <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-3">Accepted formats</h3>
               <div className="flex flex-wrap gap-2">

@@ -160,22 +160,6 @@ export default function ComparePage() {
               </ol>
             </div>
             <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-4">Database coverage</h3>
-              <div className="space-y-3">
-                {[
-                  { label: 'Indian recipes', value: '725+' },
-                  { label: 'Packaged products', value: '6,400+' },
-                  { label: 'Nutrients tracked', value: '15' },
-                  { label: 'Regional cuisines', value: '54' },
-                ].map(({ label, value }) => (
-                  <div key={label} className="flex justify-between items-center text-sm">
-                    <span className="text-[var(--color-text-muted)]">{label}</span>
-                    <span className="font-semibold text-[var(--color-text)] tabular-nums">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-3">Tip</h3>
               <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
                 If a dish isn&apos;t in the database, the AI will estimate its nutrition from training knowledge and clearly mark it as estimated.

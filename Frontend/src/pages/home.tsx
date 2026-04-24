@@ -83,7 +83,8 @@ export default function Home() {
 
   /* ── Scroll-driven hero parallax ── */
   const heroRef = useRef<HTMLDivElement>(null)
-  const { scrollY } = useScroll()
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const { scrollY } = useScroll({ container: scrollContainerRef })
   const heroContentOpacity = useTransform(scrollY, [0, 260], [1, 0])
   const heroContentY = useTransform(scrollY, [0, 260], [0, -32])
   const bgParallaxY = useTransform(scrollY, [0, 600], [0, 120])
@@ -277,7 +278,7 @@ export default function Home() {
   const showBelowFold = !authLoading
 
   return (
-    <div className="relative w-full overflow-x-hidden">
+    <div ref={scrollContainerRef} className="relative w-full h-full overflow-x-hidden overflow-y-auto">
 
       {/* ════════════════════════════════════════════════
           HERO SECTION
