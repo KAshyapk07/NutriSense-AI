@@ -1,7 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron')
 const path = require('path')
 const os = require('os')
-const fs = require('fs')
 const http = require('http')
 const crypto = require('crypto')
 const keytar = require('keytar')
@@ -13,22 +12,10 @@ const CREDENTIAL_ACCOUNT = 'refresh-token'
 
 const DESKTOP_CLIENT_ID = '41453765044-9nt3ti03gu5f1ur8bj2t9kfhnhhs22i1.apps.googleusercontent.com'
 
-// Read DESKTOP_CLIENT_SECRET from the project-root .env at runtime.
-// Desktop OAuth client secrets are acknowledged as non-secret by Google for
-// native/installed apps — embedding them is explicitly allowed.
-function readEnvSecret(key) {
-  try {
-    // In packaged app, look next to the exe; in dev, look at project root
-    const base = app.isPackaged
-      ? path.dirname(app.getPath('exe'))
-      : path.join(__dirname, '..', '..')
-    const content = fs.readFileSync(path.join(base, '.env'), 'utf8')
-    const match = content.match(new RegExp(`^${key}=(.+)$`, 'm'))
-    return match ? match[1].trim() : null
-  } catch {
-    return null
-  }
-}
+// Google explicitly permits embedding Desktop OAuth client secrets in native/
+// installed apps — they are not considered secret for this client type.
+// The .env file is never bundled into the APPX package, so we embed directly.
+const DESKTOP_CLIENT_SECRET = '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'
 
 // Chromium sometimes picks QUIC for googleapis.com and the handshake gets
 // dropped (often by Windows Defender / corporate filters), surfacing as
@@ -45,8 +32,7 @@ let mainWindow = null
 // short-lived local HTTP server in the main process. Code → id_token via
 // PKCE + client_secret (embedding the secret is permitted for Desktop clients).
 ipcMain.handle('auth:google-sign-in', async () => {
-  const clientSecret = readEnvSecret('DESKTOP_CLIENT_SECRET')
-  if (!clientSecret) throw new Error('DESKTOP_CLIENT_SECRET not set in .env')
+  const clientSecret = DESKTOP_CLIENT_SECRET
 
   const codeVerifier = crypto.randomBytes(64).toString('base64url')
   const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url')

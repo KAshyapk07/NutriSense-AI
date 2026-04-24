@@ -22,7 +22,10 @@ import PrivacyPage from './pages/privacy'
 import { Sidebar } from './components/layout/sidebar'
 import { TitleBar } from './components/layout/title-bar'
 
+// No splash + no forced login redirect for these routes
 const AUTH_ROUTES = ['/login', '/register', '/privacy']
+// Only redirect authenticated users AWAY from these (not from /privacy which is always public)
+const AUTHED_REDIRECT_ROUTES = ['/login', '/register']
 
 function App() {
   const { isAuthenticated, loading } = useAuth()
@@ -74,7 +77,9 @@ function App() {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  if (!showSplash && isAuthenticated && isAuthPage) {
+  // /privacy is public — authenticated users can visit it (e.g. from Settings).
+  // Only redirect away from strict auth-only pages (login, register).
+  if (!showSplash && isAuthenticated && AUTHED_REDIRECT_ROUTES.includes(path)) {
     return <Navigate to="/" replace />
   }
 

@@ -32,8 +32,7 @@ function toFriendlyError(error: unknown): string {
   const code = (error as { code?: string }).code
   if (code && FIREBASE_ERRORS[code]) return FIREBASE_ERRORS[code]
   if (error.message.includes('Server error')) return 'Could not reach the server. Please try again.'
-  // Temporary: show raw error for debugging
-  return `[${code ?? 'no-code'}] ${error.message}`
+  return 'Sign-in failed. Please try again.'
 }
 
 export default function LoginPage() {
@@ -338,13 +337,13 @@ export default function LoginPage() {
         >
           <p className="text-[11px] text-white/15 font-sans">
             By continuing, you agree to NutriSense's{' '}
-            <span className="underline underline-offset-2 cursor-pointer hover:text-white/35 transition-colors">
+            <Link to="/privacy" className="underline underline-offset-2 hover:text-white/35 transition-colors">
               Terms of Service
-            </span>{' '}
+            </Link>{' '}
             and{' '}
-            <span className="underline underline-offset-2 cursor-pointer hover:text-white/35 transition-colors">
+            <Link to="/privacy" className="underline underline-offset-2 hover:text-white/35 transition-colors">
               Privacy Policy
-            </span>
+            </Link>
             .
           </p>
           <p className="text-[10px] text-white/10 font-sans">

@@ -149,13 +149,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Primary session restorer: fires once fast from Firebase cache ──────────
   useEffect(() => {
-    // Safety valve: if Firebase fires but async work inside the callback hangs
-    // (e.g. Azure cold-start makes the /auth/login fetch stall beyond the 10s
-    // AbortSignal, or keytar hangs on clearRefreshToken), setLoading(false) is
-    // never reached. bootDone is set at the *start* of the callback so it can't
-    // be used to detect this case — just call setLoading(false) unconditionally
-    // after 12s. React no-ops if loading is already false.
-    const safetyTimer = setTimeout(() => setLoading(false), 12_000)
+    // Safety valve only for the pathological case where Firebase never fires at all.
+    // In normal operation setLoading(false) is called synchronously inside the callback
+    // (before the slow backend exchange), so this timer is a no-op.
+    const safetyTimer = setTimeout(() => setLoading(false), 15_000)
 
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
       // Only process the first event — subsequent ones are driven by explicit calls
@@ -163,22 +160,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       bootDone.current = true
 
       if (firebaseUser) {
+        // Set user from Firebase identity immediately so the splash screen clears
+        // without waiting for the backend (which may be cold-starting for 45s).
+        const email = firebaseUser.email ?? ''
+        const name = firebaseUser.displayName ?? email.split('@')[0]
+        persistUser({ email, name, uid: firebaseUser.uid })
+        setLoading(false)
+        // Backend exchange runs in background; retryBackendSync handles failures.
         try {
           const idToken = await firebaseUser.getIdToken()
           await exchangeFirebaseToken(idToken)
         } catch {
-          // Backend unavailable — restore user from Firebase identity
-          const email = firebaseUser.email ?? ''
-          const name = firebaseUser.displayName ?? email.split('@')[0]
-          persistUser({ email, name, uid: firebaseUser.uid })
+          // Firebase identity already set; access token obtained via retryBackendSync
         }
       } else {
         persistUser(null)
         setAccessToken(null)
-        await clearRefreshToken()
+        setLoading(false)
+        void clearRefreshToken()
       }
-
-      setLoading(false)
     })
 
     return () => {
@@ -316,14 +316,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await signInWithPopup(firebaseAuth, provider)
       fbUser = result.user
     }
-    const idToken = await fbUser.getIdToken(true)
-    try {
-      await exchangeFirebaseToken(idToken)
-    } catch {
-      const email = fbUser.email ?? ''
-      const name = fbUser.displayName ?? email.split('@')[0]
-      persistUser({ email, name, uid: fbUser.uid, googleId: fbUser.uid })
-    }
+    // Set user immediately from Firebase identity so navigation is instant.
+    // Backend exchange runs in background — don't block on Azure cold-start latency.
+    const email = fbUser.email ?? ''
+    const name = fbUser.displayName ?? email.split('@')[0]
+    persistUser({ email, name, uid: fbUser.uid, googleId: fbUser.uid })
+    backendSyncInFlight.current = true
+    void (async () => {
+      try {
+        const idToken = await fbUser.getIdToken(true)
+        await exchangeFirebaseToken(idToken)
+      } catch {
+        // retryBackendSync will pick it up on next focus / visibility change
+      } finally {
+        backendSyncInFlight.current = false
+      }
+    })()
   }, [exchangeFirebaseToken, persistUser])
 
   const logout = useCallback(() => {
