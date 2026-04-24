@@ -18,10 +18,11 @@ import Profile from './pages/profile'
 import Settings from './pages/settings'
 import LoginPage from './pages/login'
 import RegisterPage from './pages/register'
+import PrivacyPage from './pages/privacy'
 import { Sidebar } from './components/layout/sidebar'
 import { TitleBar } from './components/layout/title-bar'
 
-const AUTH_ROUTES = ['/login', '/register']
+const AUTH_ROUTES = ['/login', '/register', '/privacy']
 
 function App() {
   const { isAuthenticated, loading } = useAuth()
@@ -103,6 +104,7 @@ function App() {
           <Route path="/kitchen" element={<KitchenPage />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
         </Routes>
       </div>
     </div>

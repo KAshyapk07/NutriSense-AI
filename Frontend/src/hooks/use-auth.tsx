@@ -149,6 +149,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Primary session restorer: fires once fast from Firebase cache ──────────
   useEffect(() => {
+    // Safety valve: if Firebase fires but async work inside the callback hangs
+    // (e.g. Azure cold-start makes the /auth/login fetch stall beyond the 10s
+    // AbortSignal, or keytar hangs on clearRefreshToken), setLoading(false) is
+    // never reached. bootDone is set at the *start* of the callback so it can't
+    // be used to detect this case — just call setLoading(false) unconditionally
+    // after 12s. React no-ops if loading is already false.
+    const safetyTimer = setTimeout(() => setLoading(false), 12_000)
+
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
       // Only process the first event — subsequent ones are driven by explicit calls
       if (bootDone.current) return
@@ -172,7 +180,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setLoading(false)
     })
-    return unsubscribe
+
+    return () => {
+      clearTimeout(safetyTimer)
+      unsubscribe()
+    }
   }, []) // intentional empty deps — runs once, refs/callbacks are stable
 
   // ── Deep-link listener for Electron Google auth callback ──────────────────

@@ -271,13 +271,19 @@ export default function RegisterPage() {
                 </div>
                 <span className="text-[12px] text-white/30 font-sans leading-relaxed">
                   I agree to NutriSense's{' '}
-                  <span className="text-white/55 underline underline-offset-2 cursor-pointer hover:text-white/80 transition-colors">
+                  <Link
+                    to="/privacy"
+                    className="text-white/55 underline underline-offset-2 hover:text-white/80 transition-colors"
+                  >
                     Terms of Service
-                  </span>{' '}
+                  </Link>{' '}
                   and{' '}
-                  <span className="text-white/55 underline underline-offset-2 cursor-pointer hover:text-white/80 transition-colors">
+                  <Link
+                    to="/privacy"
+                    className="text-white/55 underline underline-offset-2 hover:text-white/80 transition-colors"
+                  >
                     Privacy Policy
-                  </span>
+                  </Link>
                 </span>
               </label>
             </motion.div>

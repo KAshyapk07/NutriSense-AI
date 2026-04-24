@@ -332,7 +332,8 @@ export default function SettingsPage() {
             <Row
               icon={Shield}
               label="Your privacy"
-              description="All data is stored on your device only — nothing is shared or sold"
+              description="View our Privacy Policy — what we collect and how we use it"
+              onClick={() => navigate('/privacy')}
             />
           </Section>
         </motion.div>

@@ -290,6 +290,7 @@ export async function loginWithFirebaseToken(firebaseIdToken: string): Promise<T
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ firebase_id_token: firebaseIdToken }),
+    signal: AbortSignal.timeout(60_000),
   })
 
   if (!res.ok) await readErrorAndThrow(res)
@@ -304,6 +305,7 @@ export async function refreshTokenPair(refreshToken: string): Promise<TokenPairR
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ refresh_token: refreshToken }),
+    signal: AbortSignal.timeout(60_000),
   })
 
   if (!res.ok) await readErrorAndThrow(res)
