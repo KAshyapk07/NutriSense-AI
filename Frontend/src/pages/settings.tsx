@@ -326,7 +326,7 @@ export default function SettingsPage() {
           <Section title="App Info">
             <Row
               icon={Info}
-              label="NutriSense AI"
+              label="NutriVerse"
               description="Version 1.0 · Indian Nutrition Intelligence · Free to use"
             />
             <Row

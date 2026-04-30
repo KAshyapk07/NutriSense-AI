@@ -37,7 +37,7 @@ export function TitleBar() {
       <div className="flex items-center gap-2 px-4">
         <img src="./icons/icon16.png" width={13} height={13} alt="" className="opacity-70" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
         <span className="text-[11px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          NutriSense AI
+          NutriVerse
         </span>
       </div>
 

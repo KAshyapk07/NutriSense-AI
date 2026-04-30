@@ -12,6 +12,7 @@ import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
 import { searchQuery, processQuery } from '@/lib/api'
 import type { SearchResult, ProcessResponse } from '@/lib/types'
+import { AiResponseFooter } from '@/components/ui/ai-response-footer'
 
 interface SwapResult {
   loading: boolean
@@ -209,15 +210,18 @@ export default function HealthySwapsPage() {
                 >
                   {/* LLM swap analysis */}
                   {result.llmResponse && (
-                    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
-                      <div className="px-6 py-4 border-b border-[var(--color-border)]">
-                        <h2 className="text-xs font-semibold uppercase tracking-widest text-green-500">
-                          Swap Suggestions for {dish}
-                        </h2>
+                    <div>
+                      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+                        <div className="px-6 py-4 border-b border-[var(--color-border)]">
+                          <h2 className="text-xs font-semibold uppercase tracking-widest text-green-500">
+                            Swap Suggestions for {dish}
+                          </h2>
+                        </div>
+                        <div className="px-6 py-5 text-base leading-relaxed text-[var(--color-text)] whitespace-pre-line">
+                          {formatLLMText(result.llmResponse)}
+                        </div>
                       </div>
-                      <div className="px-6 py-5 text-base leading-relaxed text-[var(--color-text)] whitespace-pre-line">
-                        {formatLLMText(result.llmResponse)}
-                      </div>
+                      <AiResponseFooter aiResponse={result.llmResponse} context="healthy-swaps" />
                     </div>
                   )}
 

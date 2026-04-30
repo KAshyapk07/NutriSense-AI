@@ -165,7 +165,7 @@ FORMAT YOUR RESPONSE CLEARLY WITH SECTIONS:
 
         goal_label = user_goal if user_goal else "general healthy eating"
 
-        prompt = f"""You are NutriSense AI, a nutrition intelligence assistant. Compare two foods using ONLY the data provided below. Never invent numbers.
+        prompt = f"""You are NutriVerse, a nutrition intelligence assistant. Compare two foods using ONLY the data provided below. Never invent numbers.
 
 FOOD A — {dish_a}
 {self._format_nutrition(nutrition_a)}
@@ -398,7 +398,7 @@ FORMAT YOUR RESPONSE CLEARLY WITH SECTIONS:
 
         goal_label = user_goal if user_goal else "general healthy eating"
 
-        prompt = f"""You are NutriSense AI, a nutrition intelligence assistant. Compare two foods using ONLY the data provided below. Never invent numbers.
+        prompt = f"""You are NutriVerse, a nutrition intelligence assistant. Compare two foods using ONLY the data provided below. Never invent numbers.
 
 FOOD A — {dish_a}
 {self._format_nutrition(nutrition_a)}

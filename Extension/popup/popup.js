@@ -448,7 +448,7 @@ function showNotInDatabase(query) {
       </svg>
       <div>
         <div class="ns-not-found-title">"${h(query)}" not in our database</div>
-        <div class="ns-not-found-sub">NutriSense covers Indian cuisine. Try a dish name like Biryani, Dal Makhani, or Masala Dosa.</div>
+        <div class="ns-not-found-sub">NutriVerse covers Indian cuisine. Try a dish name like Biryani, Dal Makhani, or Masala Dosa.</div>
       </div>
     </div>`
 }

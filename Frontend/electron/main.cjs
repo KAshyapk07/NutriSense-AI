@@ -7,7 +7,7 @@ const keytar = require('keytar')
 
 const APP_PROTOCOL = 'nutrisense'
 const AUTH_CHANNEL = 'on-auth-success'
-const CREDENTIAL_SERVICE = 'NutriSense-AI'
+const CREDENTIAL_SERVICE = 'NutriVerse'
 const CREDENTIAL_ACCOUNT = 'refresh-token'
 
 const DESKTOP_CLIENT_ID = '41453765044-9nt3ti03gu5f1ur8bj2t9kfhnhhs22i1.apps.googleusercontent.com'
@@ -139,10 +139,10 @@ ipcMain.handle('auth:google-sign-in', async () => {
 // refocus the already-running Electron instance via the second-instance
 // handler + handleDeepLink. The tab also attempts to close itself.
 function renderCallbackPage({ ok, message }) {
-  const title = ok ? 'Signed in · NutriSense' : 'Sign-in failed · NutriSense'
+  const title = ok ? 'Signed in · NutriVerse' : 'Sign-in failed · NutriVerse'
   const heading = ok ? "You're signed in" : 'Something went wrong'
   const body = ok
-    ? 'Returning you to NutriSense…'
+    ? 'Returning you to NutriVerse…'
     : (message || 'Please close this tab and try again.')
   const accent = ok ? '#4ADE80' : '#F87171'
   const deepLink = `${APP_PROTOCOL}://auth/done`
@@ -157,7 +157,7 @@ function renderCallbackPage({ ok, message }) {
       </script>`
     : ''
   const manualLink = ok
-    ? `<a href="${deepLink}" class="back">Return to NutriSense</a>`
+    ? `<a href="${deepLink}" class="back">Return to NutriVerse</a>`
     : ''
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${title}</title>

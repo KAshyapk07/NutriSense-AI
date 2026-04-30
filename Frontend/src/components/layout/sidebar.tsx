@@ -217,7 +217,7 @@ export function Sidebar() {
                         Extension installed
                       </p>
                       <p className="text-[11px] text-[var(--color-text-muted)] mt-1 leading-none">
-                        NutriSense for Chrome
+                        NutriVerse for Chrome
                       </p>
                     </div>
                   </div>
@@ -243,7 +243,7 @@ export function Sidebar() {
                         Get the extension
                       </p>
                       <p className="text-[11px] text-[var(--color-text-muted)] mt-1 leading-none">
-                        NutriSense for Chrome
+                        NutriVerse for Chrome
                       </p>
                     </div>
                     <ExternalLink

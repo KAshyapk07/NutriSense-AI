@@ -29,7 +29,7 @@ export function Logo({ className, size = 'lg', alwaysWhite = false }: LogoProps)
           N
         </span>
         utri
-        <span className="font-light">Sense</span>
+        <span className="font-light">Verse</span>
       </h1>
     </div>
   )

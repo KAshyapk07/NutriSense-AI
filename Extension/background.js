@@ -48,12 +48,12 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: 'nutrisense-lookup-text',
-      title: 'NutriSense: Look up "%s"',
+      title: 'NutriVerse: Look up "%s"',
       contexts: ['selection'],
     })
     chrome.contextMenus.create({
       id: 'nutrisense-classify-image',
-      title: 'NutriSense: Classify food image',
+      title: 'NutriVerse: Classify food image',
       contexts: ['image'],
     })
   })
@@ -589,11 +589,11 @@ function friendlyFirebaseError(msg) {
   if (msg.includes('MISSING_PASSWORD'))  return 'Please enter your password.'
   if (msg.includes('WEAK_PASSWORD'))     return 'Password is too weak.'
   if (msg.includes('timed out'))         return 'Server is starting up — please try again in a moment.'
-  if (msg.includes('Auth failed'))       return 'Could not reach NutriSense. Check your connection.'
+  if (msg.includes('Auth failed'))       return 'Could not reach NutriVerse. Check your connection.'
   if (msg.includes('access_denied') || msg.includes('not approve')) return 'Google sign-in was cancelled.'
   if (msg.includes('cancelled') || msg.includes('cancel')) return 'Sign-in was cancelled.'
   if (msg.includes('no access token')) return 'Google sign-in failed. Please try again.'
-  if (msg.includes('Backend auth failed')) return 'Could not reach NutriSense. Check your connection.'
+  if (msg.includes('Backend auth failed')) return 'Could not reach NutriVerse. Check your connection.'
   return 'Sign-in failed. Please try again.'
 }
 

@@ -45,9 +45,10 @@
   },
   "build": {
     "appId": "com.nutrisense.app",
-    "productName": "NutriSense AI",
+    "productName": "NutriVerse",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build-assets"
     },
     "files": [
       "dist/**/*",
@@ -63,11 +64,11 @@
       "icon": "../icon/App_icon.png"
     },
     "appx": {
-      "identityName": "KashyapK.NutriSenseAI",
+      "identityName": "KashyapK.NutriVerse",
       "publisherDisplayName": "Kashyap K",
       "publisher": "CN=C75F388C-2B85-47E0-986B-E7E392BF26C8",
-      "applicationId": "NutriSenseAI",
-      "displayName": "NutriSense AI",
+      "applicationId": "NutriVerse",
+      "displayName": "NutriVerse",
       "backgroundColor": "#0d0e11",
       "languages": ["en-US"]
     },

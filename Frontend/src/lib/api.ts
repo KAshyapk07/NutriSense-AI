@@ -105,6 +105,30 @@ export async function getAppConfig(): Promise<AppConfig> {
   }
 }
 
+export async function reportIssue(payload: {
+  description: string
+  query?: string
+  response_type?: string
+}): Promise<void> {
+  await apiFetch('/report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function submitAiFeedback(payload: {
+  ai_response: string
+  user_comment: string
+  context?: string
+}): Promise<void> {
+  await apiFetch('/ai-feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function processQuery(
   query?: string,
   image?: File,

@@ -47,6 +47,7 @@ import { cn } from '@/lib/utils'
 import { searchQuery, chefParse } from '@/lib/api'
 import { useKitchenSocket } from '@/hooks/use-kitchen-socket'
 import type { SearchResult, ChefParseResponse, CookingSessionState } from '@/lib/types'
+import { AiResponseFooter } from '@/components/ui/ai-response-footer'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -201,7 +202,7 @@ export default function KitchenPage() {
             <ChefHat size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="text-base font-bold tracking-tight">NutriSense Kitchen</h1>
+            <h1 className="text-base font-bold tracking-tight">NutriVerse Kitchen</h1>
             <p className="text-[11px] text-white/30">Voice-powered cooking assistant</p>
           </div>
           {status === 'connected' ? (
@@ -696,16 +697,20 @@ export default function KitchenPage() {
           {chatMessages.length > 0 && (
             <div ref={chatScrollRef} className="px-4 pb-2 flex flex-col gap-2 max-h-[35vh] overflow-y-auto">
               {chatMessages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed max-w-[85%]',
-                    msg.role === 'user'
-                      ? 'ml-auto bg-orange-500/15 text-orange-200/90'
-                      : 'mr-auto bg-white/[0.04] border border-white/[0.06] text-white/70',
+                <div key={i} className={msg.role === 'assistant' ? 'mr-auto w-[85%]' : 'ml-auto'}>
+                  <div
+                    className={cn(
+                      'rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed',
+                      msg.role === 'user'
+                        ? 'bg-orange-500/15 text-orange-200/90'
+                        : 'bg-white/[0.04] border border-white/[0.06] text-white/70',
+                    )}
+                  >
+                    {msg.content}
+                  </div>
+                  {msg.role === 'assistant' && (
+                    <AiResponseFooter aiResponse={msg.content} context="kitchen" dark />
                   )}
-                >
-                  {msg.content}
                 </div>
               ))}
               {chatLoading && (

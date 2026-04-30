@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("Starting NutriSense-AI backend...")
+    logger.info("Starting NutriVerse backend...")
 
     os.makedirs(settings.upload_dir, exist_ok=True)
     logger.info("Upload directory ready: %s", settings.upload_dir)
@@ -63,6 +63,6 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("Shutting down NutriSense-AI backend...")
+    logger.info("Shutting down NutriVerse backend...")
     neo4j_dep.close()
     logger.info("Shutdown complete.")

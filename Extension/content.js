@@ -432,7 +432,7 @@
         if (!res.ok) {
           likeBtn.classList.remove('active-like')
           dislikeBtn.classList.remove('active-dislike')
-          if (res.error === 'NOT_AUTHED') showToast('Sign in to NutriSense to like recipes')
+          if (res.error === 'NOT_AUTHED') showToast('Sign in to NutriVerse to like recipes')
         } else if (res.state) {
           likeBtn.classList.toggle('active-like', res.state === 'liked')
           dislikeBtn.classList.toggle('active-dislike', res.state === 'disliked')
@@ -475,7 +475,7 @@
   }
 
   function footer() {
-    return `<div class="ns-footer">NutriSense AI</div>`
+    return `<div class="ns-footer">NutriVerse</div>`
   }
 
   // ── Renderers ─────────────────────────────────────────────────────────────────

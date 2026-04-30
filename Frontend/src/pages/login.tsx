@@ -115,7 +115,7 @@ export default function LoginPage() {
             </p>
             <h2 className="font-serif text-4xl font-bold text-white leading-tight tracking-tight">
               Sign in to<br />
-              <span className="font-light italic">NutriSense</span>
+              <span className="font-light italic">NutriVerse</span>
             </h2>
             <p className="mt-3 text-sm text-white/35 font-sans leading-relaxed">
               Your nutrition intelligence platform awaits.
@@ -336,7 +336,7 @@ export default function LoginPage() {
           className="text-center space-y-1.5"
         >
           <p className="text-[11px] text-white/15 font-sans">
-            By continuing, you agree to NutriSense's{' '}
+            By continuing, you agree to NutriVerse's{' '}
             <Link to="/privacy" className="underline underline-offset-2 hover:text-white/35 transition-colors">
               Terms of Service
             </Link>{' '}

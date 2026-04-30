@@ -33,6 +33,8 @@ import { ComparisonView } from '@/components/ui/comparison-view'
 import { SearchResultCard } from '@/components/ui/search-result-card'
 import { SkeletonLoader } from '@/components/ui/skeleton-loader'
 import { processQuery, chatWithProduct } from '@/lib/api'
+import { ReportButton } from '@/components/ui/report-button'
+import { AiResponseFooter } from '@/components/ui/ai-response-footer'
 import {
   isComparison,
   isExtraction,
@@ -237,6 +239,10 @@ function AiBubble({
             {formatLLMText(chatReply)}
           </div>
         </div>
+        <AiResponseFooter aiResponse={chatReply} context="chat" />
+        <div className="flex justify-end px-1">
+          <ReportButton query={msg.query} responseType="chat" />
+        </div>
       </motion.div>
     )
   }
@@ -334,6 +340,35 @@ function AiBubble({
       {isSearch(result) && (
         <SearchResultsInline data={result} />
       )}
+
+      <AiResponseFooter
+        aiResponse={
+          isExtraction(result) ? (result.llm_response ?? result.recipe_name ?? '')
+          : isComparison(result) ? (result.llm_response ?? '')
+          : isModification(result) ? (result.llm_response ?? '')
+          : isSearch(result) ? (result.llm_response ?? '')
+          : ''
+        }
+        context={
+          isExtraction(result) ? 'extraction'
+          : isComparison(result) ? 'comparison'
+          : isModification(result) ? 'modification'
+          : isSearch(result) ? 'search'
+          : 'results'
+        }
+      />
+      <div className="flex justify-end px-1">
+        <ReportButton
+          query={msg.query}
+          responseType={
+            isExtraction(result) ? 'extraction'
+            : isComparison(result) ? 'comparison'
+            : isModification(result) ? 'modification'
+            : isSearch(result) ? 'search'
+            : 'unknown'
+          }
+        />
+      </div>
     </motion.div>
   )
 }

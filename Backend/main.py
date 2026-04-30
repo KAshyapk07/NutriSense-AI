@@ -18,6 +18,8 @@ from Backend.api import search as search_api
 from Backend.api import users as users_api
 from Backend.api import voice_stream as voice_stream_api
 from Backend.api import kitchen as kitchen_api
+from Backend.api import report as report_api
+from Backend.api import ai_feedback as ai_feedback_api
 from Backend.core.config import settings
 from Backend.core.lifespan import lifespan
 from Backend.dependencies.auth_user import _decode_access_token
@@ -31,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # App
 app = FastAPI(
-    title="NutriSense-AI",
+    title="NutriVerse",
     description="AI nutrition intelligence for Indian cuisine.",
     version="2.0.0",
     lifespan=lifespan,
@@ -98,6 +100,8 @@ app.include_router(users_api.router)
 app.include_router(chef_api.router)
 app.include_router(voice_stream_api.router)
 app.include_router(kitchen_api.router)
+app.include_router(report_api.router)
+app.include_router(ai_feedback_api.router)
 
 
 # Exception handlers

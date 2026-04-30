@@ -140,7 +140,7 @@ export default function RegisterPage() {
               <span className="font-light italic">account</span>
             </h2>
             <p className="mt-3 text-sm text-white/35 font-sans leading-relaxed">
-              Join NutriSense and start your nutrition journey today.
+              Join NutriVerse and start your nutrition journey today.
             </p>
           </motion.div>
 
@@ -270,7 +270,7 @@ export default function RegisterPage() {
                   {agreed && <Check size={9} strokeWidth={3} className="text-black" />}
                 </div>
                 <span className="text-[12px] text-white/30 font-sans leading-relaxed">
-                  I agree to NutriSense's{' '}
+                  I agree to NutriVerse's{' '}
                   <Link
                     to="/privacy"
                     className="text-white/55 underline underline-offset-2 hover:text-white/80 transition-colors"
@@ -370,7 +370,7 @@ export default function RegisterPage() {
           className="text-center space-y-1.5"
         >
           <p className="text-[11px] text-white/15 font-sans">
-            NutriSense AI — Intelligent nutrition analysis, powered by artificial intelligence.
+            NutriVerse — Intelligent nutrition analysis, powered by artificial intelligence.
           </p>
           <p className="text-[10px] text-white/10 font-sans">
             For educational purposes only. Not intended as medical advice.
