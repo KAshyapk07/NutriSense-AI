@@ -357,18 +357,19 @@ function AiBubble({
           : 'results'
         }
       />
-      <div className="flex justify-end px-1">
-        <ReportButton
-          query={msg.query}
-          responseType={
-            isExtraction(result) ? 'extraction'
-            : isComparison(result) ? 'comparison'
-            : isModification(result) ? 'modification'
-            : isSearch(result) ? 'search'
-            : 'unknown'
-          }
-        />
-      </div>
+      {!isSearch(result) && !isError(result) && result.llm_response && (
+        <div className="flex justify-end px-1">
+          <ReportButton
+            query={msg.query}
+            responseType={
+              isExtraction(result) ? 'extraction'
+              : isComparison(result) ? 'comparison'
+              : isModification(result) ? 'modification'
+              : 'unknown'
+            }
+          />
+        </div>
+      )}
     </motion.div>
   )
 }

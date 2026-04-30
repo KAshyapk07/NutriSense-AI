@@ -117,6 +117,20 @@ export async function reportIssue(payload: {
   })
 }
 
+export async function reportIssueWithImage(payload: {
+  description: string
+  query?: string
+  response_type?: string
+  image?: File | null
+}): Promise<void> {
+  const form = new FormData()
+  form.append('description', payload.description)
+  if (payload.query) form.append('query', payload.query)
+  if (payload.response_type) form.append('response_type', payload.response_type)
+  if (payload.image) form.append('image', payload.image)
+  await apiFetch('/report/feedback', { method: 'POST', body: form })
+}
+
 export async function submitAiFeedback(payload: {
   ai_response: string
   user_comment: string

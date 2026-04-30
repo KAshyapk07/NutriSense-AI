@@ -1070,6 +1070,47 @@ class Neo4jClient:
             )
             return [dict(r) for r in result]
 
+    # ── Reports ───────────────────────────────────────────────────────────
+
+    def save_report(
+        self,
+        report_id: str,
+        timestamp: str,
+        user_email: str,
+        query: str,
+        response_type: str,
+        description: str,
+        image_b64: str = "",
+    ) -> None:
+        with self.driver.session() as session:
+            session.run(
+                """
+                CREATE (:Report {
+                    id: $id,
+                    timestamp: $timestamp,
+                    user_email: $user_email,
+                    query: $query,
+                    response_type: $response_type,
+                    description: $description,
+                    image_b64: $image_b64
+                })
+                """,
+                id=report_id,
+                timestamp=timestamp,
+                user_email=user_email,
+                query=query,
+                response_type=response_type,
+                description=description,
+                image_b64=image_b64,
+            )
+
+    def get_all_reports(self) -> List[Dict[str, Any]]:
+        with self.driver.session() as session:
+            result = session.run(
+                "MATCH (r:Report) RETURN properties(r) AS r ORDER BY r.timestamp DESC"
+            )
+            return [record["r"] for record in result]
+
     # ── GDPR ──────────────────────────────────────────────────────────────
 
     def export_user_data(self, uid: str) -> Dict[str, Any]:
