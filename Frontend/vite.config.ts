@@ -86,6 +86,14 @@ export default defineConfig(({ mode }) => ({
         target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
         changeOrigin: true,
       },
+      '/report': {
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
+        changeOrigin: true,
+      },
+      '/ai-feedback': {
+        target: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net',
+        changeOrigin: true,
+      },
     },
   },
 }))

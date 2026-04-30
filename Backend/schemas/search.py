@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SearchResult(BaseModel):
@@ -46,8 +46,7 @@ class SearchResult(BaseModel):
     # Catch-all for any other fields returned by the DB
     extra: Optional[Dict[str, Any]] = Field(None, exclude=True)
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class SearchResponse(BaseModel):

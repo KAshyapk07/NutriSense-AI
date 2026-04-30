@@ -20,7 +20,16 @@ class Neo4jClient:
                 "Neo4j credentials not found. Please set NEO4J_URI, "
                 "NEO4J_USER, and NEO4J_PASSWORD environment variables."
             )
-        self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
+        self.driver = GraphDatabase.driver(
+            self.uri,
+            auth=(self.user, self.password),
+            # Recycle connections every 3 min — well before Azure's ~8 min
+            # idle TCP timeout that causes "defunct connection" 503s.
+            max_connection_lifetime=180,
+            # Ping a pooled connection before using it; if dead, get a fresh one.
+            liveness_check_timeout=20,
+            keep_alive=True,
+        )
         self._verify_connection()
 
     def _verify_connection(self):
