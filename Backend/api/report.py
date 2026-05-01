@@ -42,14 +42,18 @@ async def submit_report(
     authorization: str | None = Header(default=None),
 ):
     user_email = _user_email_from_header(authorization)
-    get_neo4j_client().save_report(
-        report_id=str(uuid.uuid4()),
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        user_email=user_email,
-        query=(body.query or "")[:500],
-        response_type=(body.response_type or ""),
-        description=body.description[:2000],
-    )
+    try:
+        get_neo4j_client().save_report(
+            report_id=str(uuid.uuid4()),
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            user_email=user_email,
+            query=(body.query or "")[:500],
+            response_type=(body.response_type or ""),
+            description=body.description[:2000],
+        )
+    except Exception as exc:
+        logger.error("Failed to save report: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to save report. Please try again.") from exc
     logger.info("Report saved — user=%s type=%s", user_email or "anon", body.response_type)
     return {"status": "received"}
 
@@ -71,15 +75,19 @@ async def submit_feedback_report(
             raise HTTPException(status_code=413, detail="Image must be under 2 MB.")
         image_b64 = base64.b64encode(content).decode()
 
-    get_neo4j_client().save_report(
-        report_id=str(uuid.uuid4()),
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        user_email=user_email,
-        query=query[:500],
-        response_type=response_type,
-        description=description[:2000],
-        image_b64=image_b64,
-    )
+    try:
+        get_neo4j_client().save_report(
+            report_id=str(uuid.uuid4()),
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            user_email=user_email,
+            query=query[:500],
+            response_type=response_type,
+            description=description[:2000],
+            image_b64=image_b64,
+        )
+    except Exception as exc:
+        logger.error("Failed to save feedback report: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to save report. Please try again.") from exc
     logger.info("Feedback report saved — user=%s has_image=%s", user_email or "anon", bool(image_b64))
     return {"status": "received"}
 
@@ -89,7 +97,11 @@ async def download_reports(token: str = ""):
     if not ADMIN_TOKEN or token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="Forbidden.")
 
-    reports = get_neo4j_client().get_all_reports()
+    try:
+        reports = get_neo4j_client().get_all_reports()
+    except Exception as exc:
+        logger.error("Failed to fetch reports from Neo4j: %s", exc)
+        raise HTTPException(status_code=500, detail="Could not retrieve reports. Neo4j may be unavailable.") from exc
 
     output = io.StringIO()
     writer = csv.writer(output)

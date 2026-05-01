@@ -110,11 +110,12 @@ export async function reportIssue(payload: {
   query?: string
   response_type?: string
 }): Promise<void> {
-  await apiFetch('/report', {
+  const res = await apiFetch('/report', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+  if (!res.ok) await readErrorAndThrow(res)
 }
 
 export async function reportIssueWithImage(payload: {
@@ -128,7 +129,8 @@ export async function reportIssueWithImage(payload: {
   if (payload.query) form.append('query', payload.query)
   if (payload.response_type) form.append('response_type', payload.response_type)
   if (payload.image) form.append('image', payload.image)
-  await apiFetch('/report/feedback', { method: 'POST', body: form })
+  const res = await apiFetch('/report/feedback', { method: 'POST', body: form })
+  if (!res.ok) await readErrorAndThrow(res)
 }
 
 export async function submitAiFeedback(payload: {

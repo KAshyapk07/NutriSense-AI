@@ -1398,7 +1398,7 @@ export default function ChefPage() {
 
   // -- Render ----------------------------------------------------------------
 
-  const isWidePhase = phase === 'prep' || phase === 'cooking'
+  const isWidePhase = phase === 'prep' || phase === 'cooking' || phase === 'results'
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">

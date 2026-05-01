@@ -392,9 +392,24 @@ export default function ChefRemotePage() {
                         />
                       </div>
                       {done === total && (
-                        <p className="text-xs text-emerald-400/80 text-center">
-                          All prep done – ready to cook!
-                        </p>
+                        <div className="flex flex-col items-center gap-3 pt-1">
+                          <p className="text-xs text-emerald-400/80 text-center">
+                            All prep done – ready to cook!
+                          </p>
+                          <motion.button
+                            onClick={() => sendAction('start-cooking')}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className={cn(
+                              'flex items-center justify-center gap-2 w-full py-4 rounded-2xl',
+                              'bg-gradient-to-r from-orange-500 to-amber-500 text-white',
+                              'text-[15px] font-bold tracking-tight active:scale-[0.98] transition-transform',
+                            )}
+                          >
+                            <Flame size={17} />
+                            Start Cooking
+                          </motion.button>
+                        </div>
                       )}
                     </div>
                   )

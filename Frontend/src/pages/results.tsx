@@ -21,6 +21,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   AlertCircle,
+  AlertTriangle,
   Send,
   RotateCcw,
   ChevronDown,
@@ -34,7 +35,6 @@ import { SearchResultCard } from '@/components/ui/search-result-card'
 import { SkeletonLoader } from '@/components/ui/skeleton-loader'
 import { processQuery, chatWithProduct } from '@/lib/api'
 import { ReportButton } from '@/components/ui/report-button'
-import { AiResponseFooter } from '@/components/ui/ai-response-footer'
 import {
   isComparison,
   isExtraction,
@@ -239,9 +239,12 @@ function AiBubble({
             {formatLLMText(chatReply)}
           </div>
         </div>
-        <AiResponseFooter aiResponse={chatReply} context="chat" />
-        <div className="flex justify-end px-1">
-          <ReportButton query={msg.query} responseType="chat" />
+        <div className="flex items-center justify-between mt-2 px-1">
+          <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
+            <AlertTriangle size={9} strokeWidth={1.75} />
+            AI-generated — verify before acting on it
+          </span>
+          <ReportButton query={msg.query} responseType="chat" aiResponse={chatReply} />
         </div>
       </motion.div>
     )
@@ -341,35 +344,6 @@ function AiBubble({
         <SearchResultsInline data={result} />
       )}
 
-      <AiResponseFooter
-        aiResponse={
-          isExtraction(result) ? (result.llm_response ?? result.recipe_name ?? '')
-          : isComparison(result) ? (result.llm_response ?? '')
-          : isModification(result) ? (result.llm_response ?? '')
-          : isSearch(result) ? (result.llm_response ?? '')
-          : ''
-        }
-        context={
-          isExtraction(result) ? 'extraction'
-          : isComparison(result) ? 'comparison'
-          : isModification(result) ? 'modification'
-          : isSearch(result) ? 'search'
-          : 'results'
-        }
-      />
-      {!isSearch(result) && !isError(result) && result.llm_response && (
-        <div className="flex justify-end px-1">
-          <ReportButton
-            query={msg.query}
-            responseType={
-              isExtraction(result) ? 'extraction'
-              : isComparison(result) ? 'comparison'
-              : isModification(result) ? 'modification'
-              : 'unknown'
-            }
-          />
-        </div>
-      )}
     </motion.div>
   )
 }

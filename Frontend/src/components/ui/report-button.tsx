@@ -6,9 +6,10 @@ import { cn } from '@/lib/utils'
 interface ReportButtonProps {
   query?: string
   responseType?: string
+  aiResponse?: string
 }
 
-export function ReportButton({ query, responseType }: ReportButtonProps) {
+export function ReportButton({ query, responseType, aiResponse }: ReportButtonProps) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
@@ -35,7 +36,7 @@ export function ReportButton({ query, responseType }: ReportButtonProps) {
           'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
           'transition-colors duration-150',
         )}
-        title="Report an issue with this response"
+        title="Report an issue or leave feedback on this response"
       >
         <Flag size={11} strokeWidth={1.75} />
         Report issue
@@ -50,7 +51,7 @@ export function ReportButton({ query, responseType }: ReportButtonProps) {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Flag size={15} strokeWidth={1.75} className="text-[var(--color-text-muted)]" />
-                <h3 className="text-sm font-semibold text-[var(--color-text)]">Report an issue</h3>
+                <h3 className="text-sm font-semibold text-[var(--color-text)]">Report issue / Feedback</h3>
               </div>
               <button
                 onClick={() => setOpen(false)}
@@ -60,7 +61,18 @@ export function ReportButton({ query, responseType }: ReportButtonProps) {
               </button>
             </div>
 
-            {query && (
+            {aiResponse && (
+              <div className="mb-4 px-3 py-2 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)]">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-1">
+                  AI Response
+                </p>
+                <p className="text-[11px] text-[var(--color-text-muted)] leading-relaxed line-clamp-3">
+                  {aiResponse.slice(0, 400)}{aiResponse.length > 400 && '…'}
+                </p>
+              </div>
+            )}
+
+            {!aiResponse && query && (
               <p className="text-[11px] text-[var(--color-text-muted)] mb-4 px-3 py-2 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] leading-relaxed line-clamp-2">
                 <span className="font-semibold">Query:</span> {query}
               </p>
@@ -70,7 +82,7 @@ export function ReportButton({ query, responseType }: ReportButtonProps) {
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Describe the issue — wrong nutrition values, inaccurate dish info, bad formatting…"
+                placeholder="Was this response helpful? Inaccurate? Off the mark? Describe any issue or share your thoughts…"
                 rows={4}
                 maxLength={2000}
                 className={cn(
