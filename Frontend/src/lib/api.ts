@@ -133,18 +133,6 @@ export async function reportIssueWithImage(payload: {
   if (!res.ok) await readErrorAndThrow(res)
 }
 
-export async function submitAiFeedback(payload: {
-  ai_response: string
-  user_comment: string
-  context?: string
-}): Promise<void> {
-  await apiFetch('/ai-feedback', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-}
-
 export async function processQuery(
   query?: string,
   image?: File,

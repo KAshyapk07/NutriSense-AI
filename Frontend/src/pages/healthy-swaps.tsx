@@ -7,12 +7,12 @@
  */
 import { useState, type FormEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight, RotateCcw } from 'lucide-react'
+import { ArrowRight, RotateCcw, AlertTriangle } from 'lucide-react'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
 import { searchQuery, processQuery } from '@/lib/api'
 import type { SearchResult, ProcessResponse } from '@/lib/types'
-import { AiResponseFooter } from '@/components/ui/ai-response-footer'
+import { ReportButton } from '@/components/ui/report-button'
 
 interface SwapResult {
   loading: boolean
@@ -221,7 +221,17 @@ export default function HealthySwapsPage() {
                           {formatLLMText(result.llmResponse)}
                         </div>
                       </div>
-                      <AiResponseFooter aiResponse={result.llmResponse} context="healthy-swaps" />
+                      <div className="flex items-center justify-between mt-2 px-1">
+                        <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
+                          <AlertTriangle size={9} strokeWidth={1.75} />
+                          AI-generated — verify before acting on it
+                        </span>
+                        <ReportButton
+                          query={dish}
+                          responseType="healthy-swaps"
+                          aiResponse={result.llmResponse}
+                        />
+                      </div>
                     </div>
                   )}
 

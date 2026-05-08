@@ -17,10 +17,11 @@ import {
 } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Send, Sparkles } from 'lucide-react'
+import { ArrowLeft, Send, Sparkles, AlertTriangle } from 'lucide-react'
 import { Header } from '@/components/layout/header'
 import { chatWithProduct } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { ReportButton } from '@/components/ui/report-button'
 import type { SearchResult, ChatMessagePayload } from '@/lib/types'
 
 /* ── Chat message type ───────────────────────────────────────────── */
@@ -221,6 +222,12 @@ export default function ProductChatPage() {
               ))}
             </div>
           )}
+          <div className="border-t border-[var(--color-border)] px-6 py-2.5 flex justify-end">
+            <ReportButton
+              query={result.name}
+              responseType={result.cluster === 'recipe' ? 'recipe-card' : 'product-card'}
+            />
+          </div>
         </div>
 
         {/* ── Chat thread ── */}
@@ -238,26 +245,45 @@ export default function ProductChatPage() {
             </div>
           )}
 
-          {messages.map((msg) => (
-            <div key={msg.id} className="flex flex-col gap-3">
-              {msg.role === 'user' ? (
-                <div className="flex justify-end">
-                  <div className="rounded-2xl rounded-tr-sm bg-[var(--color-accent)] text-[var(--color-accent-contrast)] px-5 py-3 text-sm font-medium max-w-[75%]">
-                    {msg.content}
+          {messages.map((msg, idx) => {
+            const prevUserQuery =
+              msg.role === 'assistant' && idx > 0 && messages[idx - 1].role === 'user'
+                ? messages[idx - 1].content
+                : undefined
+            return (
+              <div key={msg.id} className="flex flex-col gap-3">
+                {msg.role === 'user' ? (
+                  <div className="flex justify-end">
+                    <div className="rounded-2xl rounded-tr-sm bg-[var(--color-accent)] text-[var(--color-accent-contrast)] px-5 py-3 text-sm font-medium max-w-[75%]">
+                      {msg.content}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20">
-                    <Sparkles size={14} className="text-[var(--color-accent)]" />
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20">
+                        <Sparkles size={14} className="text-[var(--color-accent)]" />
+                      </div>
+                      <div className="rounded-2xl rounded-tl-sm bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] px-5 py-3 text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap">
+                        {msg.content}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pl-11 pr-1">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
+                        <AlertTriangle size={9} strokeWidth={1.75} />
+                        AI-generated — verify before acting on it
+                      </span>
+                      <ReportButton
+                        query={prevUserQuery}
+                        responseType={result.cluster === 'recipe' ? 'recipe-chat' : 'product-chat'}
+                        aiResponse={msg.content}
+                      />
+                    </div>
                   </div>
-                  <div className="rounded-2xl rounded-tl-sm bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] px-5 py-3 text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap">
-                    {msg.content}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            )
+          })}
 
           {loading && (
             <div className="flex items-start gap-3">

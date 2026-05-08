@@ -4,6 +4,7 @@ import { ChefHat, Clock3, ThumbsUp, ThumbsDown, Sparkles, Eye, Flame, Dumbbell, 
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { logLiked, logUnliked, logDisliked, logUndisliked, logViewed } from '@/lib/api'
+import { ReportButton } from '@/components/ui/report-button'
 import type { FoodCardData } from '@/lib/types'
 
 interface FoodCarouselCardProps {
@@ -313,12 +314,22 @@ export function FoodCarouselCard({
           {variant === 'recommend' && isAuthenticated && !hasBackendSession && (
             <span className="text-[11px] text-white/40">Syncing...</span>
           )}
-          <span
-            className="ml-auto text-[10px] font-medium uppercase tracking-[0.18em] transition-colors duration-200"
-            style={{ color: `${accentColor}80` }}
+          <div
+            className="ml-auto flex items-center gap-3"
+            onClick={(e) => e.stopPropagation()}
           >
-            {isRecipe ? 'Recipe' : 'Product'}
-          </span>
+            <ReportButton
+              query={item.name}
+              responseType={variant === 'cooked' ? 'cooked-history' : 'recommendation'}
+              dark
+            />
+            <span
+              className="text-[10px] font-medium uppercase tracking-[0.18em] transition-colors duration-200"
+              style={{ color: `${accentColor}80` }}
+            >
+              {isRecipe ? 'Recipe' : 'Product'}
+            </span>
+          </div>
         </div>
       </div>
     </div>

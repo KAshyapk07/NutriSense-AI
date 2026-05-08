@@ -1,25 +1,40 @@
 import base64
 import csv
-import io
 import logging
 import os
+import pathlib
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from Backend.dependencies.auth_user import _decode_access_token
-from Backend.dependencies.neo4j import get_neo4j_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Report"])
 
 ADMIN_TOKEN = os.getenv("REPORT_ADMIN_TOKEN", "")
-_CSV_HEADERS = ["id", "timestamp", "user_email", "query", "response_type", "description", "has_image"]
+
+_REPORT_DIR = pathlib.Path(os.getenv("REPORT_DIR", "data/reports"))
+_REPORT_FILE = _REPORT_DIR / "issue_reports.csv"
+_CSV_HEADERS = ["id", "timestamp", "user_email", "query", "response_type", "description", "image_b64"]
 
 _IMAGE_LIMIT = 2 * 1024 * 1024  # 2 MB
+
+
+def _ensure_csv() -> None:
+    _REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    if not _REPORT_FILE.exists():
+        with open(_REPORT_FILE, "w", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(_CSV_HEADERS)
+
+
+def _append_row(row: list[str]) -> None:
+    _ensure_csv()
+    with open(_REPORT_FILE, "a", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerow(row)
 
 
 def _user_email_from_header(authorization: str | None) -> str:
@@ -43,14 +58,15 @@ async def submit_report(
 ):
     user_email = _user_email_from_header(authorization)
     try:
-        get_neo4j_client().save_report(
-            report_id=str(uuid.uuid4()),
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            user_email=user_email,
-            query=(body.query or "")[:500],
-            response_type=(body.response_type or ""),
-            description=body.description[:2000],
-        )
+        _append_row([
+            str(uuid.uuid4()),
+            datetime.now(timezone.utc).isoformat(),
+            user_email,
+            (body.query or "")[:500],
+            (body.response_type or ""),
+            body.description[:2000],
+            "",
+        ])
     except Exception as exc:
         logger.error("Failed to save report: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to save report. Please try again.") from exc
@@ -76,15 +92,15 @@ async def submit_feedback_report(
         image_b64 = base64.b64encode(content).decode()
 
     try:
-        get_neo4j_client().save_report(
-            report_id=str(uuid.uuid4()),
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            user_email=user_email,
-            query=query[:500],
-            response_type=response_type,
-            description=description[:2000],
-            image_b64=image_b64,
-        )
+        _append_row([
+            str(uuid.uuid4()),
+            datetime.now(timezone.utc).isoformat(),
+            user_email,
+            query[:500],
+            response_type,
+            description[:2000],
+            image_b64,
+        ])
     except Exception as exc:
         logger.error("Failed to save feedback report: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to save report. Please try again.") from exc
@@ -96,30 +112,9 @@ async def submit_feedback_report(
 async def download_reports(token: str = ""):
     if not ADMIN_TOKEN or token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="Forbidden.")
-
-    try:
-        reports = get_neo4j_client().get_all_reports()
-    except Exception as exc:
-        logger.error("Failed to fetch reports from Neo4j: %s", exc)
-        raise HTTPException(status_code=500, detail="Could not retrieve reports. Neo4j may be unavailable.") from exc
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(_CSV_HEADERS)
-    for r in reports:
-        writer.writerow([
-            r.get("id", ""),
-            r.get("timestamp", ""),
-            r.get("user_email", ""),
-            r.get("query", ""),
-            r.get("response_type", ""),
-            r.get("description", ""),
-            "yes" if r.get("image_b64") else "no",
-        ])
-
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
+    _ensure_csv()
+    return FileResponse(
+        path=str(_REPORT_FILE),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=nutriverse_reports.csv"},
+        filename="nutriverse_reports.csv",
     )

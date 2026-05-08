@@ -7,9 +7,10 @@ interface ReportButtonProps {
   query?: string
   responseType?: string
   aiResponse?: string
+  dark?: boolean
 }
 
-export function ReportButton({ query, responseType, aiResponse }: ReportButtonProps) {
+export function ReportButton({ query, responseType, aiResponse, dark }: ReportButtonProps) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
@@ -32,9 +33,10 @@ export function ReportButton({ query, responseType, aiResponse }: ReportButtonPr
       <button
         onClick={() => setOpen(true)}
         className={cn(
-          'inline-flex items-center gap-1.5 text-[11px] font-medium',
-          'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-          'transition-colors duration-150',
+          'inline-flex items-center gap-1.5 text-[11px] font-medium transition-colors duration-150',
+          dark
+            ? 'text-white/30 hover:text-white/60'
+            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
         )}
         title="Report an issue or leave feedback on this response"
       >

@@ -61,7 +61,7 @@
         "nsis",
         "appx"
       ],
-      "icon": "../icon/App_icon.png"
+      "icon": "../icon/app_logo.png"
     },
     "appx": {
       "identityName": "KashyapK.NutriVerse",

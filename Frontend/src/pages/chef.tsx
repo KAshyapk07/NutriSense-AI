@@ -53,6 +53,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Header } from '@/components/layout/header'
 import { cn } from '@/lib/utils'
 import { searchQuery, chefParse, chatWithProduct, getAppConfig, logCooked } from '@/lib/api'
+import { ReportButton } from '@/components/ui/report-button'
 import { useHostWebSocket } from '@/hooks/use-host-websocket'
 import { useAuth } from '@/hooks/use-auth'
 import type {
@@ -1597,11 +1598,17 @@ export default function ChefPage() {
                         Preparation
                       </p>
                     </div>
-                    <div className="text-center px-4 py-2 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)]">
-                      <p className="text-2xl font-bold text-[var(--color-accent)]">
-                        {prepChecked.size}/{chefData.mise_en_place.length}
-                      </p>
-                      <p className="text-xs text-[var(--color-muted)]">ready</p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-center px-4 py-2 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)]">
+                        <p className="text-2xl font-bold text-[var(--color-accent)]">
+                          {prepChecked.size}/{chefData.mise_en_place.length}
+                        </p>
+                        <p className="text-xs text-[var(--color-muted)]">ready</p>
+                      </div>
+                      <ReportButton
+                        query={chefData.recipe_name}
+                        responseType="chef-prep"
+                      />
                     </div>
                   </div>
 
@@ -1862,6 +1869,10 @@ export default function ChefPage() {
                       </span>{' '}
                       / {totalSteps}
                     </p>
+                    <ReportButton
+                      query={`${chefData.recipe_name} — step ${stepIndex + 1}: ${currentStep.action}`}
+                      responseType="chef-cooking"
+                    />
                   </div>
                 </div>
 
@@ -2217,19 +2228,40 @@ function ChatPanel({
             tall ? 'max-h-[50vh]' : 'max-h-52',
           )}
         >
-          {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={cn(
-                'rounded-xl px-3.5 py-2.5 text-sm leading-relaxed max-w-[88%]',
-                msg.role === 'user'
-                  ? 'ml-auto bg-[var(--color-accent)] text-[var(--color-accent-contrast)]'
-                  : 'mr-auto bg-[var(--color-bg)] border border-[var(--color-border)]',
-              )}
-            >
-              {msg.content}
-            </div>
-          ))}
+          {messages.map((msg, i) => {
+            const isAssistant = msg.role === 'assistant'
+            const prevUserQuery =
+              isAssistant && i > 0 && messages[i - 1].role === 'user'
+                ? messages[i - 1].content
+                : undefined
+            return (
+              <div
+                key={i}
+                className={cn(
+                  'flex flex-col gap-1 max-w-[88%]',
+                  isAssistant ? 'mr-auto items-start' : 'ml-auto items-end',
+                )}
+              >
+                <div
+                  className={cn(
+                    'rounded-xl px-3.5 py-2.5 text-sm leading-relaxed',
+                    isAssistant
+                      ? 'bg-[var(--color-bg)] border border-[var(--color-border)]'
+                      : 'bg-[var(--color-accent)] text-[var(--color-accent-contrast)]',
+                  )}
+                >
+                  {msg.content}
+                </div>
+                {isAssistant && (
+                  <ReportButton
+                    query={prevUserQuery}
+                    responseType="chef-chat"
+                    aiResponse={msg.content}
+                  />
+                )}
+              </div>
+            )
+          })}
           {loading && (
             <div className="mr-auto rounded-xl px-3.5 py-2.5 bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-muted)] text-sm">
               <span className="inline-flex gap-1">

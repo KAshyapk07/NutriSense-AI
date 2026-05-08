@@ -5,6 +5,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { logLiked, logUnliked, logDisliked, logUndisliked, logViewed } from '@/lib/api'
+import { ReportButton } from '@/components/ui/report-button'
 import type { SearchResult } from '@/lib/types'
 
 /* ── Collapsible section ────────────────────────────────────────── */
@@ -346,12 +347,18 @@ export function SearchResultCard({
           </button>
         )}
 
-        {/* Interaction hint when not logged in */}
-        {!isAuthenticated && (
-          <span className="ml-auto text-[11px] text-[var(--color-text-muted)] opacity-50">
-            Sign in to like or dislike
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          {/* Interaction hint when not logged in */}
+          {!isAuthenticated && (
+            <span className="text-[11px] text-[var(--color-text-muted)] opacity-50">
+              Sign in to like or dislike
+            </span>
+          )}
+          <ReportButton
+            query={result.name}
+            responseType={isRecipe ? 'recipe-result-card' : 'product-result-card'}
+          />
+        </div>
       </div>
     </motion.div>
   )

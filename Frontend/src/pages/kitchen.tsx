@@ -42,12 +42,13 @@ import {
   Loader2,
   X,
   Volume2,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { searchQuery, chefParse } from '@/lib/api'
 import { useKitchenSocket } from '@/hooks/use-kitchen-socket'
 import type { SearchResult, ChefParseResponse, CookingSessionState } from '@/lib/types'
-import { AiResponseFooter } from '@/components/ui/ai-response-footer'
+import { ReportButton } from '@/components/ui/report-button'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -425,12 +426,19 @@ export default function KitchenPage() {
                     Preparation
                   </span>
                 </div>
-                {sessionState.mise_en_place && (
-                  <span className="text-xs tabular-nums text-white/30">
-                    {sessionState.mise_en_place.filter(i => i.done).length}/
-                    {sessionState.mise_en_place.length} done
-                  </span>
-                )}
+                <div className="flex items-center gap-3">
+                  {sessionState.mise_en_place && (
+                    <span className="text-xs tabular-nums text-white/30">
+                      {sessionState.mise_en_place.filter(i => i.done).length}/
+                      {sessionState.mise_en_place.length} done
+                    </span>
+                  )}
+                  <ReportButton
+                    query={sessionState.recipe_name}
+                    responseType="kitchen-prep"
+                    dark
+                  />
+                </div>
               </div>
 
               {/* Info chips */}
@@ -532,11 +540,18 @@ export default function KitchenPage() {
                 <span className="text-xs font-semibold uppercase tracking-widest text-orange-400/80">
                   Cooking
                 </span>
-                <span className="text-sm tabular-nums text-white/40">
-                  <span className="text-orange-400 font-bold">{sessionState.current_step}</span>
-                  <span className="mx-0.5">/</span>
-                  {sessionState.total_steps}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm tabular-nums text-white/40">
+                    <span className="text-orange-400 font-bold">{sessionState.current_step}</span>
+                    <span className="mx-0.5">/</span>
+                    {sessionState.total_steps}
+                  </span>
+                  <ReportButton
+                    query={`${sessionState.recipe_name} — step ${sessionState.current_step}: ${sessionState.current_action}`}
+                    responseType="kitchen-cooking"
+                    dark
+                  />
+                </div>
               </div>
 
               {/* Step progress dots */}
@@ -709,7 +724,18 @@ export default function KitchenPage() {
                     {msg.content}
                   </div>
                   {msg.role === 'assistant' && (
-                    <AiResponseFooter aiResponse={msg.content} context="kitchen" dark />
+                    <div className="flex items-center justify-between mt-2 px-1">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-white/30">
+                        <AlertTriangle size={9} strokeWidth={1.75} />
+                        AI-generated — verify before acting on it
+                      </span>
+                      <ReportButton
+                        query={i > 0 && chatMessages[i - 1].role === 'user' ? chatMessages[i - 1].content : undefined}
+                        responseType="kitchen"
+                        aiResponse={msg.content}
+                        dark
+                      />
+                    </div>
                   )}
                 </div>
               ))}

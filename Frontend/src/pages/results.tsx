@@ -221,6 +221,9 @@ function AiBubble({
           <RotateCcw size={12} />
           Retry
         </button>
+        <div className="mt-3 flex justify-center">
+          <ReportButton query={msg.query} responseType="error" aiResponse={msg.error} />
+        </div>
       </motion.div>
     )
   }
@@ -342,6 +345,42 @@ function AiBubble({
       {/* Search results — rendered inline as cards */}
       {isSearch(result) && (
         <SearchResultsInline data={result} />
+      )}
+
+      {/* Footer: AI caveat (when LLM response present) + always-visible Report button */}
+      {!isError(result) && (
+        <div className="flex items-center justify-between mt-2 px-1">
+          {(isExtraction(result) || isModification(result) || isComparison(result)) &&
+          result.llm_response ? (
+            <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
+              <AlertTriangle size={9} strokeWidth={1.75} />
+              AI-generated — verify before acting on it
+            </span>
+          ) : (
+            <span />
+          )}
+          <ReportButton
+            query={msg.query}
+            responseType={
+              isModification(result)
+                ? 'modification'
+                : isComparison(result)
+                ? 'comparison'
+                : isSearch(result)
+                ? 'search'
+                : isExtraction(result)
+                ? 'extraction'
+                : 'result'
+            }
+            aiResponse={
+              (isExtraction(result) || isModification(result) || isComparison(result))
+                ? result.llm_response ?? undefined
+                : isSearch(result)
+                ? result.llm_response ?? undefined
+                : undefined
+            }
+          />
+        </div>
       )}
 
     </motion.div>
