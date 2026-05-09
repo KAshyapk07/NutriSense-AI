@@ -56,6 +56,7 @@ function CollapsibleSection({
 function buildNutritionRows(result: SearchResult): { label: string; value: string }[] {
   const rows: { label: string; value: string }[] = []
   if (result.cluster === 'recipe') {
+    if (result.serving_size_g != null) rows.push({ label: 'Serving size',       value: `${Math.round(result.serving_size_g)} g` })
     if (result.calories != null)      rows.push({ label: 'Calories (kcal)',    value: result.calories.toFixed(1) })
     if (result.protein != null)       rows.push({ label: 'Protein (g)',         value: result.protein.toFixed(1) })
     if (result.carbohydrates != null) rows.push({ label: 'Carbohydrates (g)',   value: result.carbohydrates.toFixed(1) })
@@ -217,11 +218,11 @@ export function SearchResultCard({
               {result.name}
             </h2>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {isRecipe && result.cuisine && (
-                <Pill>{result.cuisine}</Pill>
-              )}
               {isRecipe && result.prep_time_mins != null && (
                 <Pill>{result.prep_time_mins} min</Pill>
+              )}
+              {isRecipe && result.serving_size_g != null && (
+                <Pill>{Math.round(result.serving_size_g)}g serving</Pill>
               )}
               {!isRecipe && result.brand && (
                 <Pill>{result.brand}</Pill>

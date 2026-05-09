@@ -276,11 +276,6 @@ export default function KitchenPage() {
                     >
                       <p className="font-semibold text-sm">{r.name}</p>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {r.cuisine && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-400/70">
-                            {r.cuisine}
-                          </span>
-                        )}
                         {r.prep_time_mins && (
                           <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.04] text-white/30 flex items-center gap-1">
                             <Clock size={9} /> {r.prep_time_mins} min

@@ -6,7 +6,6 @@ class HealthResponse(BaseModel):
     # Cluster A
     recipes: int
     ingredients: int
-    cuisines: int
     image_classes: int
     # Cluster B
     food_products: int = 0

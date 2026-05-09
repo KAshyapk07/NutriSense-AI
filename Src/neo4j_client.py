@@ -78,11 +78,11 @@ class Neo4jClient:
                 WITH node, score
                 ORDER BY score DESC
                 LIMIT $limit
-                OPTIONAL MATCH (node)-[:BELONGS_TO]->(c:Cuisine)
-                RETURN 
+                RETURN
                     node.id AS id,
                     node.name AS recipe_original,
                     node.food_name AS food_name,
+                    node.serving_size_g AS serving_size_g,
                     node.prep_time_mins AS prep_time_mins,
                     node.instructions AS instructions,
                     node.raw_ingredients AS raw_ingredients,
@@ -97,8 +97,6 @@ class Neo4jClient:
                     node.iron AS iron,
                     node.vitamin_c AS vitamin_c,
                     node.folate AS folate,
-                    node.composite_score AS composite_score,
-                    c.name AS cuisine,
                     score AS search_score
                 ORDER BY score DESC
                 """,
@@ -113,11 +111,12 @@ class Neo4jClient:
         with self.driver.session() as session:
             result = session.run(
                 """
-                MATCH (r:Recipe {name: $name})-[:BELONGS_TO]->(c:Cuisine)
-                RETURN 
+                MATCH (r:Recipe {name: $name})
+                RETURN
                     r.id AS id,
                     r.name AS recipe_original,
                     r.food_name AS food_name,
+                    r.serving_size_g AS serving_size_g,
                     r.prep_time_mins AS prep_time_mins,
                     r.instructions AS instructions,
                     r.raw_ingredients AS raw_ingredients,
@@ -131,9 +130,7 @@ class Neo4jClient:
                     r.calcium AS calcium,
                     r.iron AS iron,
                     r.vitamin_c AS vitamin_c,
-                    r.folate AS folate,
-                    r.composite_score AS composite_score,
-                    c.name AS cuisine
+                    r.folate AS folate
                 LIMIT 1
                 """,
                 name=name
@@ -146,7 +143,7 @@ class Neo4jClient:
             result = session.run(
                 """
                 MATCH (r:Recipe)
-                RETURN r.name AS name, r.food_name AS food_name, r.composite_score AS composite_score
+                RETURN r.name AS name, r.food_name AS food_name
                 """
             )
             return [dict(record) for record in result]
@@ -155,12 +152,13 @@ class Neo4jClient:
         with self.driver.session() as session:
             result = session.run(
                 """
-                MATCH (r:Recipe)-[:BELONGS_TO]->(c:Cuisine)
+                MATCH (r:Recipe)
                 WHERE toLower(r.food_name) CONTAINS toLower($food_name)
-                RETURN 
+                RETURN
                     r.id AS id,
                     r.name AS recipe_original,
                     r.food_name AS food_name,
+                    r.serving_size_g AS serving_size_g,
                     r.prep_time_mins AS prep_time_mins,
                     r.instructions AS instructions,
                     r.raw_ingredients AS raw_ingredients,
@@ -174,9 +172,7 @@ class Neo4jClient:
                     r.calcium AS calcium,
                     r.iron AS iron,
                     r.vitamin_c AS vitamin_c,
-                    r.folate AS folate,
-                    r.composite_score AS composite_score,
-                    c.name AS cuisine
+                    r.folate AS folate
                 """,
                 food_name=food_name
             )
@@ -189,19 +185,18 @@ class Neo4jClient:
                 """
                 MATCH (r:Recipe)       WITH count(r)  AS recipes
                 MATCH (i:Ingredient)   WITH recipes,  count(i)  AS ingredients
-                MATCH (c:Cuisine)      WITH recipes,  ingredients, count(c)  AS cuisines
-                MATCH (ic:ImageClass)  WITH recipes,  ingredients, cuisines,  count(ic) AS image_classes
-                MATCH (fp:FoodProduct) WITH recipes,  ingredients, cuisines,  image_classes, count(fp) AS food_products
-                MATCH (b:Brand)        WITH recipes,  ingredients, cuisines,  image_classes, food_products, count(b) AS brands
-                MATCH (cat:Category)   WITH recipes,  ingredients, cuisines,  image_classes, food_products, brands, count(cat) AS categories
-                MATCH (at:AllergenTag) WITH recipes,  ingredients, cuisines,  image_classes, food_products, brands, categories, count(at) AS allergen_tags
-                RETURN recipes, ingredients, cuisines, image_classes,
+                MATCH (ic:ImageClass)  WITH recipes,  ingredients, count(ic) AS image_classes
+                MATCH (fp:FoodProduct) WITH recipes,  ingredients, image_classes, count(fp) AS food_products
+                MATCH (b:Brand)        WITH recipes,  ingredients, image_classes, food_products, count(b) AS brands
+                MATCH (cat:Category)   WITH recipes,  ingredients, image_classes, food_products, brands, count(cat) AS categories
+                MATCH (at:AllergenTag) WITH recipes,  ingredients, image_classes, food_products, brands, categories, count(at) AS allergen_tags
+                RETURN recipes, ingredients, image_classes,
                        food_products, brands, categories, allergen_tags
                 """
             )
             record = result.single()
             return dict(record) if record else {
-                "recipes": 0, "ingredients": 0, "cuisines": 0, "image_classes": 0,
+                "recipes": 0, "ingredients": 0, "image_classes": 0,
                 "food_products": 0, "brands": 0, "categories": 0, "allergen_tags": 0,
             }
 
@@ -825,18 +820,17 @@ class Neo4jClient:
                           MATCH (r)-[:CONTAINS]->(i:Ingredient)-[:IS_ALLERGEN]->(a:AllergenTag)
                           WHERE a.name IN $blocked
                       }
-                    OPTIONAL MATCH (r)-[:BELONGS_TO]->(c:Cuisine)
                     RETURN
                         r.id             AS id,
                         r.name           AS name,
                         r.food_name      AS food_name,
+                        r.serving_size_g AS serving_size_g,
                         r.calories       AS calories,
                         r.protein        AS protein,
                         r.carbohydrates  AS carbohydrates,
                         r.fats           AS fats,
                         r.fibre          AS fibre,
                         r.prep_time_mins AS prep_time_mins,
-                        c.name           AS cuisine,
                         r.embedding      AS embedding,
                         'recipe'         AS cluster
                     LIMIT $limit
@@ -917,21 +911,20 @@ class Neo4jClient:
                           MATCH (r)-[:CONTAINS]->(i:Ingredient)-[:IS_ALLERGEN]->(a:AllergenTag)
                           WHERE a.name IN $blocked
                       }
-                    OPTIONAL MATCH (r)-[:BELONGS_TO]->(c:Cuisine)
-                    WITH r, c,
+                    WITH r,
                          count { (:User)-[:LIKED]->(r) }  AS like_count,
                          count { (:User)-[:COOKED]->(r) } AS cook_count
                     RETURN
                         r.id             AS id,
                         r.name           AS name,
                         r.food_name      AS food_name,
+                        r.serving_size_g AS serving_size_g,
                         r.calories       AS calories,
                         r.protein        AS protein,
                         r.carbohydrates  AS carbohydrates,
                         r.fats           AS fats,
                         r.fibre          AS fibre,
                         r.prep_time_mins AS prep_time_mins,
-                        c.name           AS cuisine,
                         r.embedding      AS embedding,
                         'recipe'         AS cluster,
                         like_count + cook_count * 2 AS popularity
@@ -1047,18 +1040,17 @@ class Neo4jClient:
             result = session.run(
                 """
                 MATCH (u:User {id: $uid})-[rel:COOKED]->(r:Recipe)
-                OPTIONAL MATCH (r)-[:BELONGS_TO]->(c:Cuisine)
                 RETURN
                     r.id             AS id,
                     r.name           AS name,
                     r.food_name      AS food_name,
+                    r.serving_size_g AS serving_size_g,
                     r.calories       AS calories,
                     r.protein        AS protein,
                     r.carbohydrates  AS carbohydrates,
                     r.fats           AS fats,
                     r.fibre          AS fibre,
                     r.prep_time_mins AS prep_time_mins,
-                    c.name           AS cuisine,
                     rel.at           AS cooked_at,
                     rel.rating       AS rating,
                     'recipe'         AS cluster

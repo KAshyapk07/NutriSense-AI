@@ -15,7 +15,7 @@ class SearchResult(BaseModel):
     final_score:  float = Field(0.0, description="Weighted combined score")
     # Optional extras — present for Recipe results
     food_name:      Optional[str] = None
-    cuisine:        Optional[str] = None
+    serving_size_g: Optional[float] = None
     prep_time_mins: Optional[float] = None
     calories:       Optional[float] = None
     protein:        Optional[float] = None
@@ -46,7 +46,7 @@ class SearchResult(BaseModel):
     # Catch-all for any other fields returned by the DB
     extra: Optional[Dict[str, Any]] = Field(None, exclude=True)
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", coerce_numbers_to_str=True)
 
 
 class SearchResponse(BaseModel):

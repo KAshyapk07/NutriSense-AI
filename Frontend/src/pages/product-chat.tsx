@@ -36,7 +36,7 @@ function buildContext(r: SearchResult): Record<string, unknown> {
   const ctx: Record<string, unknown> = { name: r.name, type: r.cluster }
 
   if (r.cluster === 'recipe') {
-    if (r.cuisine) ctx.cuisine = r.cuisine
+    if (r.serving_size_g != null) ctx.serving_size_g = r.serving_size_g
     if (r.calories != null) ctx.calories_kcal = r.calories
     if (r.protein != null) ctx.protein_g = r.protein
     if (r.carbohydrates != null) ctx.carbohydrates_g = r.carbohydrates
@@ -188,11 +188,6 @@ export default function ProductChatPage() {
               <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-accent)]">
                 {result.cluster === 'recipe' ? 'Recipe' : 'Product'}
               </span>
-              {result.cluster === 'recipe' && result.cuisine && (
-                <span className="rounded-full border border-[var(--color-border)] px-2.5 py-0.5 text-xs">
-                  {result.cuisine}
-                </span>
-              )}
               {result.cluster !== 'recipe' && result.brand && (
                 <span className="rounded-full border border-[var(--color-border)] px-2.5 py-0.5 text-xs">
                   {result.brand}

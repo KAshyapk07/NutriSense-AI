@@ -53,8 +53,10 @@ def mock_llm_engine(mock_llm_client):
 # â”€â”€ Neo4j Client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 _SAMPLE_RECIPE = {
+    "id": 1,
     "name": "Dal Makhani",
     "food_name": "dal makhani",
+    "serving_size_g": 250.0,
     "prep_time_mins": 45,
     "instructions": "Cook lentils with butter and cream.",
     "raw_ingredients": "lentils, butter, cream, spices",
@@ -69,17 +71,15 @@ _SAMPLE_RECIPE = {
     "iron": 3.5,
     "vitamin_c": 5.0,
     "folate": 50.0,
-    "composite_score": 95.0,
-    "cuisine": "Punjabi",
 }
 
 _ALL_RECIPE_NAMES = [
-    {"name": "Dal Makhani",     "food_name": "dal makhani",     "composite_score": 95.0},
-    {"name": "Butter Chicken",  "food_name": "butter chicken",  "composite_score": 92.0},
-    {"name": "Biryani",         "food_name": "biryani",         "composite_score": 90.0},
-    {"name": "Palak Paneer",    "food_name": "palak paneer",    "composite_score": 88.0},
-    {"name": "Idli",            "food_name": "idli",            "composite_score": 85.0},
-    {"name": "Dosa",            "food_name": "dosa",            "composite_score": 85.0},
+    {"name": "Dal Makhani",     "food_name": "dal makhani"},
+    {"name": "Butter Chicken",  "food_name": "butter chicken"},
+    {"name": "Biryani",         "food_name": "biryani"},
+    {"name": "Palak Paneer",    "food_name": "palak paneer"},
+    {"name": "Idli",            "food_name": "idli"},
+    {"name": "Dosa",            "food_name": "dosa"},
 ]
 
 

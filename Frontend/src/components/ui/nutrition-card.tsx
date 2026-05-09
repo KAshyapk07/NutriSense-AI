@@ -15,6 +15,8 @@ interface NutritionCardProps {
   source?: string | null
   estimated?: boolean
   constraint?: string | null
+  servingSizeG?: number | null
+  prepTimeMins?: number | null
   className?: string
 }
 
@@ -157,6 +159,8 @@ export function NutritionCard({
   accuracy,
   estimated,
   constraint,
+  servingSizeG,
+  prepTimeMins,
   className,
 }: NutritionCardProps) {
   const SKIP_KEYS = new Set(['recipe_name', 'name', 'estimated values', 'estimated_values'])
@@ -167,7 +171,7 @@ export function NutritionCard({
           value !== null &&
           value !== undefined &&
           value !== '' &&
-          !isPlaceholder(typeof value === 'string' ? value : null),
+          (typeof value !== 'string' || !isPlaceholder(value)),
       )
     : []
 
@@ -202,6 +206,12 @@ export function NutritionCard({
             <Badge>{Math.round(accuracy)}% Accuracy</Badge>
           )}
           {estimated && <Badge variant="outline">Estimated</Badge>}
+          {servingSizeG != null && (
+            <Badge variant="outline">{Math.round(servingSizeG)} g serving</Badge>
+          )}
+          {prepTimeMins != null && prepTimeMins > 0 && (
+            <Badge variant="outline">{prepTimeMins} min</Badge>
+          )}
         </div>
       </div>
 

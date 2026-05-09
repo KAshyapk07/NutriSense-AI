@@ -3,7 +3,13 @@ from __future__ import annotations
 
 from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+# Recipe nodes carry integer ids (1..N) post-migration; products carry string
+# barcodes. Every model below that accepts an id from either cluster opts in to
+# numeric→string coercion so Pydantic v2's strict validation doesn't silently
+# drop recipe rows.
+_ID_COERCE_CONFIG = ConfigDict(coerce_numbers_to_str=True)
 
 
 # ── Requests ──────────────────────────────────────────────────────────────
@@ -41,6 +47,7 @@ class OnboardingPreferencesRequest(BaseModel):
 
 
 class InteractionStateItem(BaseModel):
+    model_config = _ID_COERCE_CONFIG
     id: str
     cluster: Literal["recipe", "product"]
     state: Literal["liked", "disliked"]
@@ -58,6 +65,7 @@ class RecentSearch(BaseModel):
 
 
 class RecentViewed(BaseModel):
+    model_config = _ID_COERCE_CONFIG
     id: str
     name: str
     cluster: Literal["recipe", "product"]
@@ -67,6 +75,7 @@ class RecentViewed(BaseModel):
 # ── Recommendation item ───────────────────────────────────────────────────
 
 class RecommendationItem(BaseModel):
+    model_config = _ID_COERCE_CONFIG
     id: str
     name: str
     cluster: Literal["recipe", "product"]
@@ -78,7 +87,7 @@ class RecommendationItem(BaseModel):
     )
     # Recipe fields
     food_name:      Optional[str]   = None
-    cuisine:        Optional[str]   = None
+    serving_size_g: Optional[float] = None
     calories:       Optional[float] = None
     protein:        Optional[float] = None
     carbohydrates:  Optional[float] = None
@@ -119,10 +128,11 @@ class UserProfile(BaseModel):
 # ── Cooked row item ───────────────────────────────────────────────────────
 
 class CookedItem(BaseModel):
+    model_config = _ID_COERCE_CONFIG
     id:             str
     name:           str
     food_name:      Optional[str]   = None
-    cuisine:        Optional[str]   = None
+    serving_size_g: Optional[float] = None
     calories:       Optional[float] = None
     protein:        Optional[float] = None
     carbohydrates:  Optional[float] = None

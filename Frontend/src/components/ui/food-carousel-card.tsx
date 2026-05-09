@@ -140,7 +140,10 @@ export function FoodCarouselCard({
   ]
 
   const subtitle = isRecipe
-    ? [item.cuisine, item.prep_time_mins != null ? `${item.prep_time_mins} min` : null]
+    ? [
+        item.prep_time_mins != null ? `${item.prep_time_mins} min` : null,
+        item.serving_size_g != null ? `${Math.round(item.serving_size_g)}g` : null,
+      ]
         .filter(Boolean)
         .join(' \u00b7 ')
     : [item.brand, item.category].filter(Boolean).join(' \u00b7 ')
@@ -297,7 +300,7 @@ export function FoodCarouselCard({
                     recipe: {
                       name: item.name,
                       food_name: item.food_name,
-                      cuisine: item.cuisine,
+                      serving_size_g: item.serving_size_g,
                       prep_time_mins: item.prep_time_mins,
                       cluster: item.cluster,
                       id: item.id,

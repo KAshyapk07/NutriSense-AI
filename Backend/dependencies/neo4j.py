@@ -15,10 +15,9 @@ def init() -> None:
     _client = Neo4jClient()
     stats = _client.get_stats()
     logger.info(
-        "Neo4j connected — Recipes: %s, Ingredients: %s, Cuisines: %s, ImageClasses: %s",
+        "Neo4j connected — Recipes: %s, Ingredients: %s, ImageClasses: %s",
         stats.get("recipes"),
         stats.get("ingredients"),
-        stats.get("cuisines"),
         stats.get("image_classes"),
     )
 

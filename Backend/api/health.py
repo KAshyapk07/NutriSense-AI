@@ -26,7 +26,6 @@ async def health_check(
         status="ok",
         recipes=stats.get("recipes", 0),
         ingredients=stats.get("ingredients", 0),
-        cuisines=stats.get("cuisines", 0),
         image_classes=stats.get("image_classes", 0),
         food_products=stats.get("food_products", 0),
         brands=stats.get("brands", 0),

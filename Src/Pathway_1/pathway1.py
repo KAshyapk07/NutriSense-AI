@@ -144,7 +144,7 @@ def pathway_1_lookup(recipe_name: str, neo4j_client) -> dict:
             "instructions": record.get("instructions", ""),
             "meta": {
                 "id": record.get("id"),
-                "cuisine": record.get("cuisine"),
+                "serving_size_g": record.get("serving_size_g"),
                 "total_time": to_python_type(record.get("prep_time_mins")),
             },
         })

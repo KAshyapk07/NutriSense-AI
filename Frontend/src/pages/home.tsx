@@ -113,7 +113,7 @@ export default function Home() {
         name: r.name,
         cluster: r.cluster,
         food_name: r.food_name ?? null,
-        cuisine: r.cuisine ?? null,
+        serving_size_g: r.serving_size_g ?? null,
         calories: r.calories ?? r.calories_100g ?? null,
         protein: r.protein ?? r.proteins_100g ?? null,
         carbohydrates: r.carbohydrates ?? r.carbohydrates_100g ?? null,

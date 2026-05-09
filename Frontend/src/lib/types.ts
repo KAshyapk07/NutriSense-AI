@@ -105,7 +105,7 @@ export interface SearchResult {
   final_score: number
   // Recipe fields
   food_name?: string | null
-  cuisine?: string | null
+  serving_size_g?: number | null
   prep_time_mins?: number | null
   calories?: number | null
   protein?: number | null
@@ -294,7 +294,7 @@ export interface FoodCardData {
   interaction_state?: 'liked' | 'disliked' | null
   is_filler?: boolean
   food_name?: string | null
-  cuisine?: string | null
+  serving_size_g?: number | null
   calories?: number | null
   protein?: number | null
   carbohydrates?: number | null

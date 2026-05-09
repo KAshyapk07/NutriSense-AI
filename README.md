@@ -1,238 +1,397 @@
-# NutriSense-AI — Comprehensive Project Status & Roadmap
+<div align="center">
 
-![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
-![TensorFlow](https://img.shields.io/badge/TensorFlow-Keras-orange)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688)
-![React](https://img.shields.io/badge/React-18+-61DAFB)
-![Neo4j](https://img.shields.io/badge/Neo4j-Graph-blue)
-![Pytest](https://img.shields.io/badge/Pytest-Passing-success)
-![LLM](https://img.shields.io/badge/LLM-Ollama%203.2-blueviolet)
-![ConvNeXt](https://img.shields.io/badge/Model-ConvNeXt--Small-green)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+<img src="icon/app_logo.png" alt="NutriVerse" width="120" />
 
+# NutriVerse
 
-A comprehensive AI system analyzing Indian food recipes through database lookup, recipe modification, nutritional comparison, and image classification to provide dietary insights. Designed to provide accurate nutritional guidance for Indian cuisine with fallback estimation capabilities.
+**AI nutrition intelligence for Indian cuisine.**
+
+Look up any dish, classify a meal from a photo, and cook hands-free with a voice kitchen assistant — backed by a curated food knowledge graph.
+
+[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Live-0078D4?logo=microsoft)](https://apps.microsoft.com/)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Live-4285F4?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](#)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](#)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](#)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](#)
+[![Neo4j](https://img.shields.io/badge/Neo4j-Aura-008CC1?logo=neo4j&logoColor=white)](#)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+</div>
+
+---
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Why This Matters](#why-this-matters)
 - [Features](#features)
-- [System Architecture](#system-architecture)
-- [Dataset](#dataset)
-- [Installation](#installation)
-- [Usage](#usage)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
-- [Model Performance](#model-performance)
-- [Blogs](#blogs)
-- [Future Enhancements](#future-enhancements)
-- [Author](#author)
+- [Repository Structure](#repository-structure)
+- [Installation](#installation)
+- [Environment Variables](#environment-variables)
+- [Running Locally](#running-locally)
+- [API Reference](#api-reference)
+- [Models](#models)
+- [Knowledge Graph](#knowledge-graph)
+- [Distribution](#distribution)
 - [License](#license)
+- [Author](#author)
+
+---
 
 ## Overview
 
-NutriSense AI is an end-to-end AI system for analyzing Indian food nutrition using
-database lookup, image classification, and intelligent recipe modifications.
-It addresses the lack of accurate Indian food representation in commercial nutrition APIs.
+**NutriVerse** is a full-stack AI nutrition assistant focused on Indian cuisine. Most nutrition apps are built around Western foods — Indian dishes are missing, inaccurately estimated, or buried under generic categories. NutriVerse closes that gap with a curated recipe and food-product knowledge graph, a vision model trained on Indian dishes, and a conversational layer that handles cooking-time questions in natural language.
 
-The system unifies multiple data sources and AI techniques to provide:
-- Database-driven lookups for 725+ curated recipes with complete nutritional profiles
-- Intelligent image classification across 148 Indian dish categories
-- AI-powered recipe modifications (e.g., "low-calorie version of Paneer Butter Masala")
-- Multi-recipe comparison with optional nutritional summaries
-- Fallback LLM estimation for out-of-database queries
+The product ships across three surfaces from a single codebase:
 
-## Why This Matters
+- **Desktop** — Electron application distributed via the Microsoft Store and as an NSIS installer.
+- **Browser extension** — Right-click any food image on the web for instant nutrition; live on the Chrome Web Store.
+- **Web** — The same React SPA served directly from the FastAPI backend.
 
-- Domain Gap: Indian cuisines are underrepresented in commercial nutrition APIs
-- Data Fusion: Unified heterogeneous datasets using custom fuzzy matching (Nutritional values + Cooking methods/Ingredients)
-- Multi-Modal Access: Users can query via text or images
+A standalone **phone-only kitchen mode** turns any smartphone into a hands-free cooking coach using WebSocket voice streaming and server-side speech-to-text.
 
+---
 
 ## Features
 
-### 1. Database Lookup (Pathway 1)
+### Nutrition intelligence
+- **Dish lookup** — Type or speak a dish name; receive macros, ingredients, allergens, and a step-by-step recipe.
+- **Image classification** — Upload a meal photo (or right-click on the web) for top-3 predictions with confidence scores and full nutrition.
+- **Compare dishes** — Side-by-side macro comparison with an LLM-generated summary of which is healthier and why.
+- **Healthy swaps** — Lower-calorie, higher-protein, or allergy-safe alternatives drawn from the graph.
+- **Recipe modification** — *"Make it vegan"*, *"less oil"*, *"high-protein version"* — the LLM rewrites ingredients and re-estimates nutrition.
+- **Semantic search** — Embedding-based GraphRAG search (e.g. *"high-protein vegetarian breakfast"*).
 
-- Direct extraction of recipes and nutritional information from the unified dataset
-- Cleaning and fuzzy matching for accurate recipe identification
-- Custom composite scoring for ranking results
-- Returns complete nutritional breakdown for queried dishes
+### Conversational and multimodal
+- **Product chat** — Follow-up questions on any dish or packaged food.
+- **Chef mode** — Walk through a recipe step by step in conversation.
+- **Kitchen mode (phone)** — Hands-free voice assistant with WebSocket audio streaming, voice-activity detection, and a multi-stage intent pipeline.
+- **PC + phone remote** — QR-code pairing lets a phone drive Chef mode on a PC over WebSocket.
 
-### 2. Recipe Modification (Pathway 2)
+### Personalization
+- Like / dislike / cooked tracking modelled as graph relationships.
+- Allergen and dietary preferences (`ALLERGIC_TO`, `PREFERS_CUISINE`, `PREFERS_HEALTH_TAG` edges on the user node).
+- Hybrid recommender that blends popular content with personalized recommendations as the taste profile grows; rating-weighted "cooked" interactions; search-intent re-ranking using sentence embeddings.
+- 3-step onboarding modal for new users (cuisines → health goal → dietary tags).
 
-- Router passes the extracted dish and constraint from the query
-- The obtained dish is extracted from the database
-- the data from the database and the user constraint are passed to LLM engine
-- The LLM engine generates modified instructions while maintaining nutritional accuracy
-- Preserves dish authenticity while meeting dietary requirements
+### Platform
+- Email/password and Google OAuth sign-in via Firebase.
+- JWT access + refresh tokens with revocation list.
+- Per-user LLM rate limiting and prompt-level response caching.
+- Static SPA + API served from a single container with security headers, CORS allow-list, and file-upload validation.
 
-### 3. Nutritional Comparison (Pathway 3)
+---
 
-- Compare nutritional profiles of two recipes side-by-side
-- Displays macro/micronutrient breakdown for both
-- LLM-generated summary highlighting the healthier option
-- Helps users make informed dietary choices
+## Screenshots
 
-### 4. Image Classification (Pathway 4)
+<div align="center">
 
-- Upload food images for automatic dish recognition
-- **ConvNeXt-Small** (timm `convnext_small.fb_in22k_ft_in1k`) fine-tuned on a **148-class Indian food image dataset**
-- Returns top-3 predictions; each candidate is looked up in the database in order and the first hit is returned with the full nutritional profile
-- All three image predictions are attached to the response under `meta.image_predictions`
-- Top-1 accuracy: 86.98% | Top-3 accuracy: 97.10% | Top-5 accuracy: 98.49%
+<img src="Extension/Store_Images/1.jpeg" width="32%" /> <img src="Extension/Store_Images/2.jpeg" width="32%" /> <img src="Extension/Store_Images/3.jpeg" width="32%" />
 
-### 5. Router 
+<img src="Extension/Store_Images/4.jpeg" width="32%" /> <img src="Extension/Store_Images/5.jpeg" width="32%" />
 
-- The Router classifies the user query intent using an LLM
-- Handles the execution of all the pathways(1,2 & 3)
-- Extracts the dish mentioned by the user using LLM
+</div>
 
-### 6. LLM Fallback Estimator
+---
 
-- Intelligent fallback when dishes aren't found in the database
-- Obtains most similar dish from the database (uses Pathway 1)
-- Uses LLM to estimate the range of plausible nutrition for the dish
-- Clearly marked with lower confidence with warnings
+## Architecture
 
-## System Architecture
-
-![NutriSense AI Architecture](Docs/Architecture.jpg)
-
-This diagram illustrates the high-level architecture of NutriSense AI, including
-query routing, database lookup, image classification, LLM-powered reasoning,
-and fallback estimation pathways.
-
-## Dataset
-
-### 1. The Unified Food Dataset 
-
-This dataset contains 725 curated Indian dishes, where each row links a recipe to its detailed nutrient profile. It was created by cleaning and fuzzy-matching two independent sources one with recipes and another with nutritional information using a custom composite score based on multiple string matching metrics and token overlap.
-
-```bash
- composite = (
-            WEIGHT_TOKENSET * token_set_score +
-            WEIGHT_WRATIO  * wratio_score +
-            12 * ft_score
-        ) * (0.7 + 0.3 * overlap_factor) - neg_penalty
+```
+                ┌───────────────────────────────────────────────┐
+                │  Surfaces                                     │
+                │  • Desktop (Electron, MS Store + NSIS)        │
+                │  • Web SPA (React 19 + Vite)                  │
+                │  • Chrome Extension (MV3)                     │
+                └───────────────────────┬───────────────────────┘
+                                        │  HTTPS / WSS
+                                        ▼
+                ┌───────────────────────────────────────────────┐
+                │  FastAPI gateway (Azure App Service)          │
+                │  Auth · Rate-limit · Routing · Static SPA     │
+                └───┬─────────┬─────────┬──────────┬────────────┘
+                    │         │         │          │
+                    ▼         ▼         ▼          ▼
+              Intent       Vision    GraphRAG    Voice / STT
+              Router      classifier (embeddings)  pipeline
+                    │         │         │          │
+                    └────┬────┴────┬────┴────┬─────┘
+                         ▼         ▼         ▼
+                ┌──────────────┐ ┌─────────────┐ ┌────────────┐
+                │  Neo4j Aura  │ │  LLM (Groq) │ │  Storage   │
+                │  Knowledge   │ │  Llama 3.3  │ │  (Azure FS)│
+                │  Graph       │ │  + Gemini   │ │            │
+                └──────────────┘ └─────────────┘ └────────────┘
 ```
 
-Dataset 1: [Indian Food Nutritional Values Dataset (2025)](https://www.kaggle.com/datasets/batthulavinay/indian-food-nutrition?source=post_page-----22eb05a4c278---------------------------------------)
+A single FastAPI process serves the React build, the JSON API, and the WebSocket endpoints for voice and kitchen modes. The intent **Router** classifies each query as a lookup, comparison, modification, semantic search, or freeform chat, then dispatches it to the appropriate pathway.
 
-Dataset 2: [Indian Food Recipes Dataset (Cleaned Version)](https://www.kaggle.com/datasets/sooryaprakash12/cleaned-indian-recipes-dataset?source=post_page-----22eb05a4c278---------------------------------------)
-
-The unified dataset contains 
-
-- 725 curated indian recipes
-- 15+ nutritional attributes (Calories, Protein, Fat, Carbs, Fiber, Sodium, Iron, Calcium, Vitamin A, Vitamin C, etc.)
-- Ingredients used
-- Cooking Method / Instructions
-- Time to prepare the dish
-- Regional cuisines
-
-***The Unified Dataset :*** [NutriSense AI Dataset](https://www.kaggle.com/datasets/kashyap077/indian-recipes-ingredients-nutrition-and-cooking) 
-
-### 2. The Image Dataset 
-
-This dataset is used to train the image classification model (ConvNeXt-Small) for Indian food classification.
-**The dataset contains 20136 images across 148 classes**. The dataset is split into train (75%), validation (15%), and test (10%) sets using stratified sampling.
-
-***Image Dataset*** : [Indian Food Images for Model Fine-Tuning 2026](https://www.kaggle.com/datasets/kashyap077/indian-food-images-for-model-fine-tuning-2026)
-**This dataset was not uploaded into the repo due to very large size**
-
-## Installation 
-
-### Prerequisites:
-
-- Python 3.9+
-- Neo4j Desktop (local) or AuraDB
-- Node.js (for React frontend)
-- Ollama (for local LLM)
-
-```bash
-# Clone the repository
-git clone https://github.com/KAshyapk07/NutriSense-AI.git
-cd nutrisense-ai
-
-# Create virtual environment
-python -m venv venv
-venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Download the dataset 
-# Place the Image dataset in the Data / Images folder
-
-# Install Llama model 
-```
-### Usage
-
-**1. Start the Backend (FastAPI)**
-```bash
-python run.py
-```
-
-**2. Start the Frontend (React)**
-```bash
-cd frontend
-npm install
-npm run dev
-```
+---
 
 ## Tech Stack
 
-- **Backend**: FastAPI, Python 3.9+
-- **Frontend**: React, Vite, Tailwind CSS
-- **Database**: Neo4j (Knowledge Graph)
-- **AI/ML**: Ollama (Llama 3.2 local inference), ConvNeXt-Small via timm (Image Classification)
-- **Data Validation**: Pydantic (Structured LLM Outputs)
-- **Testing**: Pytest, Pytest-Asyncio (116+ tests)
-- **Fuzzy Matching**: RapidFuzz
+**Frontend**
+- React 19, TypeScript, Vite 6
+- Tailwind CSS (CSS-variable theme tokens), Framer Motion
+- React Router v7, native `fetch`, React Context for state
+- Firebase Web SDK, `@react-oauth/google`
+- Electron 31, `electron-builder` for NSIS and APPX targets
 
-## Model Performance
+**Backend**
+- Python 3.11, FastAPI, Uvicorn
+- Pydantic v2, JOSE JWT, Firebase Admin
+- WebSocket endpoints for voice, kitchen, and chef-remote sessions
+- `cachetools` for LLM response caching, custom per-user rate limiter
 
-The image classification model is a ConvNeXt-Small backbone (pretrained on ImageNet-22k, fine-tuned on ImageNet-1k via timm) with a custom classification head trained for 50 epochs on the Indian food image dataset. Training used Mixup/CutMix augmentation, EMA, cosine LR schedule with linear warmup, and stochastic depth.
+**AI / ML**
+- Image classifier: **ConvNeXt-Small** (`timm`, PyTorch), 239 Indian food classes
+- Speech-to-text: **faster-whisper** (`small.en`, int8, CPU)
+- Embeddings: **sentence-transformers** (`all-MiniLM-L6-v2`)
+- LLMs: **Groq** (`llama-3.3-70b-versatile`) for chat and voice; **Gemini** (`gemini-2.0-flash`) for structured-output paths
 
-#### Test-Set Performance (best checkpoint — epoch 49)
+**Data**
+- **Neo4j Aura** knowledge graph (recipes, ingredients, food products, brands, categories, allergens, image classes, users)
+- Full-text indexes on recipe and product names; range indexes on ids; uniqueness constraint on `User.id`
 
-- Top-1 accuracy: 86.98%
-- Top-3 accuracy: 97.10%
-- Top-5 accuracy: 98.49%
-- Macro F1: 0.7740
-- Weighted F1: 0.8756
-- Best validation accuracy: 87.34%
-- Training time: ~528 minutes (2x GPU)
+**Distribution**
+- Microsoft Store (APPX), NSIS installer, Chrome Web Store
+- Backend: Docker → Azure App Service (Southeast Asia)
 
-## Blogs 
+---
 
-I documented the key technical components of this project in detailed blog posts:
+## Repository Structure
 
-- **Building an EfficientNet Image Classification Model With GPU Acceleration**  
-   [Read the blog](https://medium.com/@kashyapkumar1234567890/building-an-efficientnet-image-classification-model-with-gpu-acceleration-999fd95fe926)
+```
+NutriSense-AI/
+├── Backend/              FastAPI app (api/, core/, dependencies/, schemas/)
+├── Src/                  ML & domain library
+│   ├── Image_classifier/   ConvNeXt training, inference, model checkpoint
+│   ├── LLM/                Groq / Gemini clients, caching, engine
+│   ├── Pathway_1/          Fuzzy recipe + product lookup
+│   ├── Router/             Intent router
+│   ├── services/           GraphRAG, recommender
+│   └── neo4j_client.py     All Cypher lives here
+├── frontend/             React 19 + Vite + Electron desktop wrapper
+├── Extension/            Chrome MV3 extension
+├── data/                 Persistent reports / feedback CSVs
+├── Notebooks/            Training & exploration notebooks
+├── tests/                Pytest suite
+├── Dockerfile            Multi-stage build (frontend + backend in one image)
+├── run.py                Local entrypoint
+└── requirements.txt
+```
 
-- **How I Cleaned and Unified Two Messy Indian Food Datasets Into One High Quality Dataset**    
-   [Read the blog](https://medium.com/@kashyapkumar1234567890/how-i-cleaned-and-unified-two-messy-indian-food-datasets-into-one-high-quality-dataset-for-my-22eb05a4c278)
+---
 
-## Future Enhancements
+## Installation
 
-- **Phase 3: GraphRAG & Vector Search**: Hybrid retrieval using vector embeddings and graph structure.
-- **Phase 4: React Frontend Upgrade**: Complete the transition to a modern React UI.
-- **Phase 5: AI Chef Agent**: Interactive step-by-step cooking companion.
-- **Phase 6: Authentication & User Graph**: Personalized recommendations and history tracking.
-- **Phase 7: AI & ML Enhancements**: Data augmentation, fine-tuning, and RAG exploration.
-- **Phase 8: Production & Deployment**: Docker containerization, cloud deployment, and CI/CD.
+### Prerequisites
+- Python **3.11**
+- Node.js **20+**
+- A Neo4j Aura (or self-hosted Neo4j 5.x) instance with the recipe graph loaded
+- API keys: **Groq**, **Gemini** (optional), **Firebase** project + service account
 
-## Author
+### Setup
 
-**Kashyap K** : kashyapk1305@gmail.com
+```bash
+git clone https://github.com/KAshyapk07/NutriSense-AI.git
+cd NutriSense-AI
+
+# Backend
+python -m venv .venv
+.venv\Scripts\activate           # Windows PowerShell
+pip install -r requirements.txt
+
+# Frontend
+cd frontend
+npm install
+cd ..
+```
+
+The image classifier checkpoint is pulled from Hugging Face on first run (or pre-baked into the Docker image). See [Models](#models).
+
+---
+
+## Environment Variables
+
+Create a `.env` file at the project root. Only the variables relevant to your deployment surface are required.
+
+| Variable | Purpose |
+| --- | --- |
+| `NEO4J_URI` | Bolt URI for the knowledge graph (e.g. `neo4j+s://xxxx.databases.neo4j.io`) |
+| `NEO4J_USER` | Neo4j username |
+| `NEO4J_PASSWORD` | Neo4j password |
+| `GROQ_API_KEY` | Groq API key (chat, voice, processing) |
+| `GROQ_MODEL` | Default `llama-3.3-70b-versatile` |
+| `GEMINI_API_KEY` | (Optional) Gemini key for structured-output paths |
+| `GEMINI_MODEL` | Default `gemini-2.0-flash` |
+| `AUTH_SECRET_KEY` | JWT signing key (32+ random bytes) |
+| `AUTH_ACCESS_TOKEN_MINUTES` | Access token TTL (default `15`) |
+| `AUTH_REFRESH_TOKEN_DAYS` | Refresh token TTL (default `180`) |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` *or* `FIREBASE_SERVICE_ACCOUNT_PATH` | Firebase Admin credentials |
+| `FIREBASE_PROJECT_ID` | Firebase project id |
+| `ALLOWED_ORIGINS` | Comma-separated CORS allow-list |
+| `PUBLIC_URL` | Externally reachable base URL (used for Chef-Remote QR codes) |
+| `SERVE_STATIC` | `true` to serve the SPA from FastAPI (default), `false` if behind a CDN |
+| `FRONTEND_DIR` | Path to the built SPA (default `frontend/dist`) |
+| `MAX_CONTENT_MB` | Upload limit (default `16`) |
+| `REPORT_ADMIN_TOKEN` | Token guarding `/report/download` and `/ai-feedback/download` |
+| `REPORT_DIR` | Directory for issue-report CSVs (e.g. `/home/data/reports` on Azure) |
+
+Frontend (build-time, Vite):
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_API_URL` | Backend base URL (leave empty to use same origin) |
+| `VITE_FIREBASE_API_KEY` etc. | Standard Firebase web config |
+
+---
+
+## Running Locally
+
+### Backend (FastAPI)
+
+```bash
+python run.py
+# or:
+uvicorn Backend.main:app --reload --port 8000
+```
+
+OpenAPI docs are available at `http://localhost:8000/docs`.
+
+### Frontend (Vite dev server)
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open `http://localhost:5173`. The dev server proxies API calls to the backend; in production the same FastAPI process serves the built SPA.
+
+### Desktop (Electron)
+
+```bash
+cd frontend
+npm run desktop          # run Electron against the dev build
+npm run dist:win         # produce an NSIS installer
+npm run dist:appx        # produce a Microsoft Store APPX
+npm run dist:all         # both targets
+```
+
+### Docker (full stack)
+
+```bash
+docker build -t nutriverse .
+docker run -p 8000:8000 --env-file .env nutriverse
+```
+
+The multi-stage `Dockerfile` builds the frontend, installs Python dependencies, pre-downloads the vision and STT models, and exposes a `/health` healthcheck.
+
+---
+
+## API Reference
+
+The HTTP surface is small and deliberate. All authenticated routes accept a `Bearer` JWT.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Liveness check |
+| `GET` | `/config` | Returns `PUBLIC_URL` for QR-code pairing |
+| `POST` | `/process` | Multimodal entrypoint — text, image, or both → routed pathway |
+| `GET` | `/search` | Semantic / GraphRAG search |
+| `POST` | `/chat` | Conversational follow-ups |
+| `POST` | `/chef/parse` · `/chef/intent` | Chef-mode parsing and intent classification |
+| `POST` | `/auth/login` · `/auth/refresh` · `/auth/logout` | Auth lifecycle |
+| `GET/PUT` | `/users/me` (profile, allergens, preferences, interactions, recommendations, cooked, export) | User domain |
+| `POST/DELETE` | `/users/me/{liked,disliked,viewed,cooked}/{item_id}` | Interaction events |
+| `POST` | `/report` · `/report/feedback` | Issue / feedback submission |
+| `POST` | `/ai-feedback` | LLM-response feedback |
+| `WS` | `/ws/kitchen/{session_id}` | Phone-only voice kitchen session |
+| `WS` | `/ws/chef-voice/{session_id}` | Chef-remote voice channel |
+
+Schemas live under `Backend/schemas/`. Full interactive docs: `/docs` and `/redoc`.
+
+---
+
+## Models
+
+**Image classification — ConvNeXt-Small**
+- Backbone: `convnext_small.fb_in22k_ft_in1k` from `timm`, fine-tuned for **239 Indian food classes**.
+- Custom classification head: `LayerNorm → Dropout(0.3) → Linear(in→512) → GELU → Dropout(0.2) → Linear(512→num_classes)`, `drop_path_rate=0.2`.
+- Inference transform: `Resize(256) → CenterCrop(224) → ToTensor → ImageNet normalize`.
+- Returns top-K predictions with confidence; classes map directly to `ImageClass` nodes in the graph for instant nutrition lookup.
+- Checkpoint hosted on Hugging Face (`Kashyapk07/NutriSense_ConvNext_Small_Best`) and pulled at container build.
+
+**Speech-to-text — faster-whisper**
+- Model `small.en`, `int8` quantization, CPU.
+- Streaming audio over WebSocket (WebM/Opus, 250 ms chunks) with a `WebmAccumulator` for reliable multi-utterance decoding.
+- Voice-activity detection with a 0.75 s gap threshold; cooking-vocabulary prompt biases Whisper toward recipe-specific terms.
+
+**LLM stack**
+- **Groq** Llama 3.3 70B Versatile is the production LLM for chat, voice, and processing — wrapped in a `CachedLLMClient` and gated by a per-user rate limiter.
+- **Gemini 2.0 Flash** handles structured-JSON and reasoning paths.
+- The intent **Router** runs cheap regex and keyword gates before falling back to the LLM, keeping latency and token spend low for the common case.
+
+---
+
+## Knowledge Graph
+
+NutriVerse is built around a Neo4j graph that captures dishes, ingredients, packaged products, allergens, and user behaviour in one place.
+
+**Node labels**
+- `Recipe` — Indian dishes with macros, instructions, tags
+- `Ingredient` — Raw ingredients linked to recipes
+- `FoodProduct` — Packaged / commercial foods
+- `Brand` — Manufacturer brands
+- `Category` — Product categories
+- `AllergenTag` — Allergen taxonomy (peanut, gluten, dairy, …)
+- `ImageClass` — Maps each vision-model class to a `Recipe`
+- `Cuisine`, `HealthTag` — Preference taxonomy
+- `User` — Authenticated user
+- `SearchEvent` — Logged queries used to seed the recommender
+
+**Relationships**
+- `(Recipe)-[:CONTAINS]->(Ingredient)`
+- `(Ingredient)-[:IS_ALLERGEN]->(AllergenTag)`
+- `(FoodProduct)-[:MADE_BY]->(Brand)`, `(FoodProduct)-[:IN_CATEGORY]->(Category)`
+- `(ImageClass)-[:MAPS_TO]->(Recipe)`
+- `(User)-[:VIEWED|LIKED|DISLIKED|COOKED]->(Recipe|FoodProduct)`
+- `(User)-[:ALLERGIC_TO]->(AllergenTag)`
+- `(User)-[:PREFERS_CUISINE]->(Cuisine)`, `(User)-[:PREFERS_HEALTH_TAG]->(HealthTag)`
+- `(User)-[:PERFORMED]->(SearchEvent)`
+
+Indexes are created idempotently on startup (recipe and product id, user-id uniqueness, full-text on recipe names).
+
+---
+
+## Distribution
+
+- **Microsoft Store** — Published as **NutriVerse** under Health & fitness; APPX built via `electron-builder` with Partner Center identity wired into `frontend/package.json`.
+- **NSIS installer** — Single-file `.exe` for users outside the Store.
+- **Chrome Web Store** — MV3 extension in `Extension/`; right-click any image on any page to classify it via the production backend.
+- **Backend** — Docker image deployed to **Azure App Service** (Southeast Asia). Persistent storage uses Azure Files mounts for issue-report and feedback CSVs.
+
+The repository ships:
+- `Dockerfile` — multi-stage build that bundles frontend, backend, and models in one image.
+- `validate-docker.sh` — sanity check for the production image.
+- Health checks at `/health`, security headers on every response, HSTS in production.
+
+---
 
 ## License
 
-Code in this repository is licensed under the **MIT License**. See the [`LICENSE`](LICENSE) file for full text.
+Released under the **MIT License** — see [`LICENSE`](LICENSE).
 
-**Dataset Licenses:**
-- Recipe source (Unified dataset): CC BY NC SA 4.0
-- Nutrition source: Unknown (used for research/educational purposes only)
+The trained model weights, recipe dataset, and brand assets (icons, store listings) are **not** covered by the MIT License and remain © 2026 Kashyap K. Contact for any commercial reuse.
 
+---
 
-The unified recipe–nutrition dataset must **not** be used as a medical or clinical nutrition reference.
+## Author
+
+**Kashyap K** — built and maintained as a solo project. Issues and pull requests are welcome.
+
+- Microsoft Store: *NutriVerse*
+- Chrome Web Store: *NutriVerse*
+- GitHub: [`@KAshyapk07`](https://github.com/KAshyapk07)

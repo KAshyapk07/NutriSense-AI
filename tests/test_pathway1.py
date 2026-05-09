@@ -154,8 +154,9 @@ class TestPathway1Lookup:
     def test_found_result_has_meta_keys(self, mock_neo4j):
         result = pathway_1_lookup("Dal Makhani", mock_neo4j)
         meta = result["results"][0]["meta"]
-        assert "cuisine" in meta
+        assert "serving_size_g" in meta
         assert "total_time" in meta
+        assert "cuisine" not in meta
 
     def test_not_found_for_gibberish_query(self, mock_neo4j):
         result = pathway_1_lookup("xyzzy_gibberish_12345", mock_neo4j)

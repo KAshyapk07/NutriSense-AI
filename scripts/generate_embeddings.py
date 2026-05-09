@@ -58,7 +58,6 @@ def recipe_text(r: Dict[str, Any]) -> str:
     parts = [
         _safe(r.get("name")),
         _safe(r.get("food_name")),
-        _safe(r.get("cuisine")),
         _safe(r.get("raw_ingredients")),
     ]
     return " | ".join(p for p in parts if p)
@@ -187,9 +186,8 @@ def main():
             for r in session.run(
                 """
                 MATCH (r:Recipe)
-                OPTIONAL MATCH (r)-[:BELONGS_TO]->(c:Cuisine)
                 RETURN r.id AS id, r.name AS name, r.food_name AS food_name,
-                       r.raw_ingredients AS raw_ingredients, c.name AS cuisine
+                       r.raw_ingredients AS raw_ingredients
                 """
             )
         ]

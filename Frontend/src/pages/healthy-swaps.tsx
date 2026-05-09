@@ -249,7 +249,7 @@ export default function HealthySwapsPage() {
                           >
                             <h4 className="font-semibold text-[var(--color-text)] mb-1">{r.name}</h4>
                             <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                              {r.cluster === 'recipe' ? (r.cuisine ?? 'Recipe') : (r.brand ?? 'Product')}
+                              {r.cluster === 'recipe' ? 'Recipe' : (r.brand ?? 'Product')}
                             </p>
                             <div className="space-y-1.5 text-sm">
                               {r.cluster === 'recipe' ? (

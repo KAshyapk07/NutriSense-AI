@@ -513,6 +513,8 @@
         <div class="ns-meta">
           ${data.confidence != null ? `<span class="ns-conf">${Math.round(data.confidence * 100)}% match</span>` : ''}
           ${data.estimated ? `<span class="ns-tag">Estimated</span>` : ''}
+          ${data.meta?.serving_size_g != null ? `<span class="ns-tag">${Math.round(data.meta.serving_size_g)} g serving</span>` : ''}
+          ${data.meta?.total_time != null && data.meta.total_time > 0 ? `<span class="ns-tag">${data.meta.total_time} min</span>` : ''}
         </div>
       </div>
       ${nutRows(data.nutrition)}
@@ -570,7 +572,7 @@
       <div class="ns-result">
         <div class="ns-result-left">
           <div class="ns-result-name">${h(r.name)}</div>
-          <div class="ns-result-sub">${[r.cuisine, r.brand, r.cluster].filter(Boolean).map(h).join(' · ')}</div>
+          <div class="ns-result-sub">${[r.brand, r.cluster].filter(Boolean).map(h).join(' · ')}</div>
         </div>
         <div class="ns-result-right">
           ${r.calories != null ? `<div class="ns-result-cal">${Math.round(r.calories)} kcal</div>` : ''}

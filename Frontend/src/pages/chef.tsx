@@ -407,11 +407,6 @@ function RecipeCard({
           <h3 className="font-semibold text-base group-hover:text-[var(--color-accent)] transition-colors capitalize">
             {recipe.name}
           </h3>
-          {recipe.cuisine && (
-            <p className="text-xs text-[var(--color-muted)] mt-1 capitalize">
-              {recipe.cuisine}
-            </p>
-          )}
         </div>
         <ArrowRight
           size={18}
@@ -723,7 +718,7 @@ export default function ChefPage() {
 
       setRecipeContext({
         name: recipe.name,
-        cuisine: recipe.cuisine,
+        serving_size_g: recipe.serving_size_g,
         calories: recipe.calories,
         protein: recipe.protein,
         carbohydrates: recipe.carbohydrates,

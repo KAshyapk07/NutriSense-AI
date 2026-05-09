@@ -208,11 +208,11 @@ class GraphRAGService:
                 """
                 CALL db.index.vector.queryNodes('recipe_embedding', $limit, $vector)
                 YIELD node, score
-                OPTIONAL MATCH (node)-[:BELONGS_TO]->(c:Cuisine)
                 RETURN
                     node.id AS id,
                     node.name AS name,
                     node.food_name AS food_name,
+                    node.serving_size_g AS serving_size_g,
                     node.prep_time_mins AS prep_time_mins,
                     node.instructions AS instructions,
                     node.raw_ingredients AS raw_ingredients,
@@ -227,7 +227,6 @@ class GraphRAGService:
                     node.vitamin_c AS vitamin_c,
                     node.folate AS folate,
                     node.free_sugar AS free_sugar,
-                    c.name AS cuisine,
                     score AS vector_score
                 ORDER BY score DESC
                 """,

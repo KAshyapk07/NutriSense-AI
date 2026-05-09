@@ -282,10 +282,26 @@ btnGoogle.addEventListener('click', async () => {
 })
 
 // ── Open full app ─────────────────────────────────────────────────────────────
+// On Windows, send the user to apps.microsoft.com — the page auto-prompts the
+// Microsoft Store app, which launches the installed NutriVerse if present and
+// otherwise shows the install screen. Non-Windows platforms fall back to the
+// hosted web build.
 
-document.getElementById('btn-open-app').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net' })
-})
+const STORE_WEB_URL = 'https://apps.microsoft.com/detail/9NQL47W346F6'
+const WEB_APP_URL   = 'https://nutrisense-ai-c8f2anche0b6a8be.southeastasia-01.azurewebsites.net'
+
+async function openNutriVerseApp() {
+  let isWindows = false
+  try {
+    const info = await chrome.runtime.getPlatformInfo()
+    isWindows = info.os === 'win'
+  } catch {
+    isWindows = /Windows/i.test(navigator.userAgent)
+  }
+  chrome.tabs.create({ url: isWindows ? STORE_WEB_URL : WEB_APP_URL })
+}
+
+document.getElementById('btn-open-app').addEventListener('click', openNutriVerseApp)
 
 // ── Sign out ──────────────────────────────────────────────────────────────────
 
@@ -520,6 +536,8 @@ function renderExtraction(data) {
         <div class="ns-card-meta">
           ${data.confidence != null ? `<span class="ns-conf">${Math.round(data.confidence * 100)}% match</span>` : ''}
           ${data.estimated ? `<span class="ns-tag">Estimated</span>` : ''}
+          ${data.meta?.serving_size_g != null ? `<span class="ns-tag">${Math.round(data.meta.serving_size_g)} g serving</span>` : ''}
+          ${data.meta?.total_time != null && data.meta.total_time > 0 ? `<span class="ns-tag">${data.meta.total_time} min</span>` : ''}
         </div>
       </div>
       ${nutritionRows(data.nutrition)}
@@ -574,7 +592,7 @@ function renderSearch(data) {
     <div class="ns-result">
       <div class="ns-result-left">
         <div class="ns-result-name">${h(r.name)}</div>
-        <div class="ns-result-sub">${[r.cuisine, r.brand, r.cluster].filter(Boolean).map(h).join(' · ')}</div>
+        <div class="ns-result-sub">${[r.brand, r.cluster].filter(Boolean).map(h).join(' · ')}</div>
       </div>
       <div class="ns-result-right">
         ${r.calories != null ? `<div class="ns-result-cal">${Math.round(r.calories)} kcal</div>` : ''}

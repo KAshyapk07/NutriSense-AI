@@ -119,6 +119,8 @@ function VariantCard({
                 accuracy={variant.accuracy as number | undefined}
                 source={variant.source as string | null | undefined}
                 estimated={variant.estimated as boolean | undefined}
+                servingSizeG={(variant.meta as { serving_size_g?: number } | undefined)?.serving_size_g}
+                prepTimeMins={(variant.meta as { total_time?: number } | undefined)?.total_time}
               />
             </div>
           </motion.div>
@@ -285,6 +287,8 @@ function AiBubble({
             accuracy={result.accuracy}
             source={result.source}
             estimated={result.estimated}
+            servingSizeG={result.meta?.serving_size_g as number | null | undefined}
+            prepTimeMins={result.meta?.total_time as number | null | undefined}
           />
           {result.meta?.image_predictions && Array.isArray(result.meta.image_predictions) && (
             <div className="flex flex-wrap items-center gap-2 px-1">
