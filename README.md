@@ -2,8 +2,8 @@
 
 <img src="icon/app_logo.png" alt="NutriVerse" width="120" />
 
-# NutriVerse
-
+# NutriVerse  
+(Previously NutriSense-AI)
 **AI nutrition intelligence for Indian cuisine.**
 
 Look up any dish, classify a meal from a photo, and cook hands-free with a voice kitchen assistant — backed by a curated food knowledge graph.
@@ -19,6 +19,18 @@ Look up any dish, classify a meal from a photo, and cook hands-free with a voice
 
 </div>
 
+## Availability
+
+Nutriverse is available across multiple platforms.
+
+- **Demo Video:**  
+  https://youtu.be/S9uM1ZFKMDY
+
+- **Chrome Extension:**  
+  https://chromewebstore.google.com/detail/nutriverse/ekeccifmanfpnoncndkodionjocbmcff
+
+- **Microsoft Store Application:**  
+  https://apps.microsoft.com/detail/9nql47w346f6?hl=en-US&gl=IN
 ---
 
 ## Table of Contents
